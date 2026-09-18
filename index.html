@@ -1,0 +1,2251 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ededed">
+<meta name="description" content="拔刀：同时出招的回合制聚会桌游。0 血起步，一回合定生死。支持开房间在线联机，也可以和电脑玩。">
+<title>拔刀</title>
+<style>/* ============================================================================
+   拔刀 · 样式
+   排版参考 hullqin 的桌游工具：浅灰底 #ededed + 白卡片 + 蓝色强调 + 移动优先
+   间距只用 4 / 8 / 12 / 16 / 24 / 32 这几档，避免忽大忽小
+   ==========================================================================*/
+:root {
+  --bg: #ededed;
+  --card: #ffffff;
+  --ink: #273847;
+  --ink-2: #4b5b6b;
+  --muted: #788fa5;
+  --line: #e3e6ea;
+  --line-2: #f2f4f6;
+  --blue: #3b82f6;
+  --blue-d: #2563eb;
+  --blue-bg: #eaf2ff;
+  --red: #ef4444;
+  --red-bg: #fdecec;
+  --green: #10b981;
+  --green-bg: #e8f8f2;
+  --green-ink: #0d8f6f;
+  --amber: #f59e0b;
+  --amber-bg: #fff5e6;
+  --purple: #8b5cf6;
+  --purple-bg: #f2eefe;
+  --purple-ink: #6d3fe0;
+  --r-s: 8px;
+  --r-m: 12px;
+  --r-l: 16px;
+  --shadow: 0 1px 2px rgba(39, 56, 71, .06), 0 4px 12px rgba(39, 56, 71, .04);
+  --shadow-up: 0 -2px 12px rgba(39, 56, 71, .08);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Microsoft YaHei UI", "Microsoft YaHei", Ubuntu, "Helvetica Neue", sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 0; background: none; }
+h1, h2, h3, h4, p { margin: 0; }
+ul { margin: 0; padding: 0; list-style: none; }
+.hidden { display: none !important; }
+
+/* --------------------------------------------------------------- 通用件 */
+.wrap { max-width: 760px; margin: 0 auto; padding: 16px 16px 24px; }
+.card {
+  background: var(--card);
+  border-radius: var(--r-l);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+.card + .card { margin-top: 12px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.row.space { justify-content: space-between; }
+.grow { flex: 1; min-width: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.tiny { font-size: 12px; }
+.bold { font-weight: 600; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.divider { height: 1px; background: var(--line); margin: 12px 0; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px; padding: 0 16px;
+  border-radius: var(--r-m);
+  background: var(--line-2);
+  color: var(--ink);
+  font-weight: 600;
+  transition: transform .06s ease, background .15s ease, opacity .15s ease;
+}
+.btn:active { transform: scale(.98); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.btn.primary { background: var(--blue); color: #fff; }
+.btn.primary:hover { background: var(--blue-d); }
+.btn.danger { background: var(--red-bg); color: var(--red); }
+.btn.ghost { background: transparent; border: 1px solid var(--line); }
+.btn.block { width: 100%; }
+.btn.lg { min-height: 52px; font-size: 17px; }
+.btn.sm { min-height: 34px; padding: 0 10px; font-size: 13px; }
+
+.field {
+  width: 100%; min-height: 44px; padding: 0 12px;
+  background: var(--line-2); border: 1px solid transparent; border-radius: var(--r-m);
+}
+.field:focus { outline: none; background: #fff; border-color: var(--blue); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 8px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; line-height: 1.7;
+}
+.badge.blue { background: var(--blue-bg); color: var(--blue-d); }
+.badge.red { background: var(--red-bg); color: var(--red); }
+.badge.green { background: var(--green-bg); color: var(--green-ink); }
+.badge.amber { background: var(--amber-bg); color: #b46b00; }
+.badge.purple { background: var(--purple-bg); color: var(--purple-ink); }
+.badge.grey { background: var(--line-2); color: var(--muted); }
+
+/* --------------------------------------------------------------- 首页 */
+.hero { text-align: center; padding: 32px 0 24px; }
+.hero h1 { font-size: 40px; font-weight: 800; letter-spacing: .12em; }
+.hero h1 span { color: var(--blue); }
+.hero p { color: var(--muted); margin-top: 8px; }
+
+/* --------------------------------------------------------------- 顶栏 */
+.topbar {
+  position: sticky; top: 0; z-index: 30;
+  background: rgba(237, 237, 237, .94);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+.topbar .inner { max-width: 760px; margin: 0 auto; padding: 8px 16px; display: flex; align-items: center; gap: 8px; }
+
+/* 倒计时 */
+.timer { display: flex; align-items: center; gap: 12px; }
+.timer .num {
+  font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums;
+  min-width: 62px; text-align: center; line-height: 1;
+}
+.timer .num.warn { color: var(--red); }
+.bar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--blue); transition: width .45s linear; }
+.bar > i.warn { background: var(--red); }
+
+/* --------------------------------------------------------------- 玩家格 */
+.players { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.pcard {
+  background: var(--card); border-radius: var(--r-m); padding: 10px 12px;
+  border: 1.5px solid transparent; box-shadow: var(--shadow);
+  position: relative; transition: border-color .15s ease;
+}
+.pcard.me { border-color: var(--blue); }
+.pcard.dead { opacity: .5; }
+.pcard.reveal-dead { border-color: var(--red); }
+.pcard .pname { font-weight: 700; display: flex; align-items: center; gap: 4px; }
+.pcard .stats { display: flex; gap: 10px; margin-top: 4px; font-size: 13px; color: var(--ink-2); }
+.pcard .stats b { font-variant-numeric: tabular-nums; }
+.pcard .flags { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.pcard .flags:empty { display: none; }
+.pcard .act {
+  margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line);
+  font-size: 12.5px; color: var(--ink-2);
+}
+.pcard .act .ev { display: block; color: var(--muted); }
+.pcard .act .ev.hit { color: var(--red); }
+.pcard .act .ev.good { color: var(--green-ink); }
+.avatar {
+  width: 22px; height: 22px; border-radius: 50%; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 12px; font-weight: 700;
+}
+
+/* --------------------------------------------------------------- 道具面板 */
+.myinfo { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.myinfo .kv { display: flex; align-items: baseline; gap: 4px; }
+.myinfo .kv b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.bag { display: flex; gap: 6px; flex-wrap: wrap; }
+.bag .chip {
+  background: var(--purple-bg); color: var(--purple-ink);
+  border-radius: 999px; padding: 1px 10px; font-size: 12px; font-weight: 600;
+}
+
+.tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  flex: none; padding: 6px 14px; border-radius: 999px;
+  background: var(--line-2); color: var(--ink-2); font-size: 13.5px; font-weight: 600;
+}
+.tab.on { background: var(--blue); color: #fff; }
+.tab .dot {
+  display: inline-block; min-width: 16px; margin-left: 4px; padding: 0 4px;
+  background: var(--red); color: #fff; border-radius: 999px; font-size: 11px;
+}
+
+.items { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; margin-top: 12px; }
+.item {
+  border: 1.5px solid var(--line); border-radius: var(--r-m); padding: 10px;
+  background: #fff; transition: border-color .15s ease, background .15s ease;
+}
+.item.on { border-color: var(--blue); background: var(--blue-bg); }
+.item.locked { opacity: .4; }
+.item .head { display: flex; align-items: center; gap: 6px; }
+.item .icon { font-size: 17px; }
+.item .nm { font-weight: 700; }
+.item .cost { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--amber); }
+.item .cost.free { color: var(--green-ink); }
+.item .desc { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.45; }
+.item .ctrl { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.stepper { display: flex; align-items: center; gap: 2px; background: var(--line-2); border-radius: 999px; padding: 2px; }
+.stepper button {
+  width: 30px; height: 30px; border-radius: 50%; font-size: 17px; font-weight: 700; color: var(--ink-2);
+}
+.stepper button:active { background: #fff; }
+.stepper .n { min-width: 22px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+.item .alloc-btn { margin-left: auto; font-size: 12px; }
+.item .alloc-btn.warn { color: var(--red); font-weight: 700; }
+
+/* 目标多选：点头像选人 */
+.targets { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.tchips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+.tchip {
+  position: relative;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--line-2); color: var(--muted);
+  font-size: 13px; font-weight: 700;
+  border: 2px solid transparent;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.tchip.on { background: var(--blue); color: #fff; border-color: var(--blue-d); }
+.tchip i {
+  position: absolute; right: -4px; bottom: -4px;
+  min-width: 16px; height: 16px; padding: 0 3px;
+  background: var(--red); color: #fff; border-radius: 999px;
+  font-size: 11px; font-style: normal; font-weight: 700; line-height: 16px; text-align: center;
+}
+
+.quick { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.err { color: var(--red); font-size: 13px; margin-top: 8px; }
+
+/* --------------------------------------------------------------- 底栏 */
+.actionbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  background: rgba(255, 255, 255, .96);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-up);
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+}
+.actionbar .inner { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+.actionbar .info { font-size: 13px; color: var(--muted); }
+.spacer-bottom { height: 84px; }
+
+/* --------------------------------------------------------------- 弹层 */
+.mask {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(39, 56, 71, .45);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.sheet {
+  width: 100%; max-width: 760px; max-height: 86vh; overflow: auto;
+  background: var(--card); border-radius: var(--r-l) var(--r-l) 0 0;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  animation: slide-up .18s ease-out;
+}
+@keyframes slide-up { from { transform: translateY(16px); opacity: .6; } to { transform: none; opacity: 1; } }
+.sheet h3 { font-size: 17px; font-weight: 700; }
+.tlist { margin-top: 8px; }
+.trow {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0; border-bottom: 1px solid var(--line-2);
+}
+.trow .nm { flex: 1; min-width: 0; }
+.sheet .foot { display: flex; gap: 8px; margin-top: 16px; }
+.sheet .foot .btn { flex: 1; }
+.quickpick { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+/* 规则正文 */
+.doc { font-size: 14px; line-height: 1.8; color: var(--ink-2); }
+.doc h4 { font-size: 15px; font-weight: 700; color: var(--ink); margin: 16px 0 4px; }
+.doc h4:first-child { margin-top: 0; }
+.doc b { color: var(--ink); }
+.doc code { background: var(--line-2); padding: 0 4px; border-radius: 4px; font-size: 13px; }
+
+/* 日志 */
+.logbox { max-height: 40vh; overflow: auto; font-size: 13px; color: var(--ink-2); }
+.logbox li { padding: 4px 0; border-bottom: 1px solid var(--line-2); }
+.logbox li:last-child { border-bottom: 0; }
+
+/* toast */
+.toast {
+  position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
+  z-index: 60; background: rgba(39, 56, 71, .92); color: #fff;
+  padding: 8px 16px; border-radius: 999px; font-size: 13.5px;
+  animation: fade-in .15s ease-out; max-width: 86vw; text-align: center;
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* 结算高亮 */
+.res { border-left: 3px solid var(--blue); padding-left: 8px; }
+.res.died { border-left-color: var(--red); }
+
+.stepper button[disabled] { opacity: .3; pointer-events: none; }
+
+.row.wrap { flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div id="app"><div class="wrap"><div class="card">正在加载…</div></div></div>
+<div id="overlay"></div>
+
+<!-- 联机库（PeerJS）：三个 CDN 依次兜底；拿不到就降级成"只能和电脑玩" -->
+<script>
+(function () {
+  var urls = [
+    'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js',
+    'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js'
+  ];
+  var i = 0;
+  function next() {
+    if (i >= urls.length) return;
+    var s = document.createElement('script');
+    s.src = urls[i++];
+    s.async = true;
+    s.onload = function () { if (window.__peerReady) window.__peerReady(); };
+    s.onerror = next;
+    document.head.appendChild(s);
+  }
+  next();
+})();
+</script>
+
+<script>/* ============================================================================
+ * 拔刀 · 规则引擎（纯逻辑，不碰 DOM，可被 node 直接 require 做单元测试）
+ * ----------------------------------------------------------------------------
+ * 血量模型：初始 0，下限 0，不设上限。
+ *   结算时 伤害 = 外面总攻击 - 我的防御；若 血量 - 伤害 < 0 则死亡，否则扣血。
+ *   也就是说 0 血的人挨 1 点伤害就死，合掌加血 = 多一层缓冲。
+ * ==========================================================================*/
+const BADAO = (function () {
+  'use strict';
+
+  const EPS = 1e-12;         // 浮点容差，必须远小于 FEI_EPS
+  const FEI_EPS = 1e-9;      // 叠肥的 ε（趋于 0+，但要大到能被浮点分辨）
+  const FEI_ATK = 2 - FEI_EPS; // 叠肥：2-ε —— 2 血的人能剩 ε 血站住，且破不了「小反」的 2 点弹性
+
+  /* ---------------------------------------------------------------- 道具表 */
+  // kind: gain 集 | attack 攻击 | defense 防御 | reverse 反盾 | smite 磁暴
+  //     | steal 偷 | heal 合掌 | selfguard 自守
+  // pack: 所属拓展包（null = 基础包）
+  const ITEM_LIST = [
+    { id: 'ji', name: '集', cost: 0, kind: 'gain', icon: '🪙',
+      desc: '点数 +1。结算时立刻到手，可用于本回合消费。' },
+
+    { id: 'yidao', name: '一刀', cost: 1, kind: 'attack', atk: 1, icon: '🗡️', desc: '攻击 1。' },
+    { id: 'shuangdao', name: '双刀', cost: 2, kind: 'attack', atk: 2, icon: '⚔️', desc: '攻击 2。' },
+    { id: 'shangdiao', name: '上吊', cost: 3, kind: 'attack', atk: 3, icon: '🪢', desc: '攻击 3，赠送 1 个精血。', gift: { jingxue: 1 } },
+    { id: 'sidao', name: '四刀', cost: 4, kind: 'attack', atk: 4, icon: '🔪', desc: '攻击 4，赠送 1 个剑气。', gift: { jianqi: 1 } },
+    { id: 'wudao', name: '五刀', cost: 5, kind: 'attack', atk: 5, icon: '🗡', desc: '攻击 5，赠送 1 个天雷。', gift: { tianlei: 1 } },
+    { id: 'caihong', name: '彩虹斩', cost: 8, kind: 'attack', atk: 8, icon: '🌈', lethal: true,
+      desc: '攻击 8。命中即死，无视血量与自守；但会被防具挡下（伤害 ≤ 0 则无效）。基础规则每回合限 1 个。' },
+
+    { id: 'jingxue', name: '精血', cost: 0, kind: 'attack', atk: 0.5, icon: '🩸', giftOnly: true,
+      desc: '上吊的赠品。伤害 0.5，可叠加。' },
+    { id: 'jianqi', name: '剑气', cost: 0, kind: 'attack', atk: 1, icon: '💨', giftOnly: true,
+      desc: '四刀的赠品。伤害 1。' },
+    { id: 'tianlei', name: '天雷', cost: 0, kind: 'attack', atk: 3, icon: '⚡', giftOnly: true,
+      weakVs: ['xiaofang'], weakAtk: 2, desc: '五刀的赠品。伤害 3，但在小防面前只有 2 伤害。' },
+    { id: 'feimei', name: '肥美', cost: 0, kind: 'attack', atk: 0.5, icon: '🍖', giftOnly: true,
+      desc: '不死的赠品。伤害 0.5。' },
+    { id: 'diefei', name: '叠肥', cost: 0, kind: 'attack', atk: FEI_ATK, icon: '🥩', consume: { feimei: 3 },
+      desc: '消耗 3 个肥美，造成 2-ε 伤害。' },
+    { id: 'cibao', name: '磁暴', cost: 2, kind: 'smite', smiteOn: ['cidun'], icon: '🧲',
+      desc: '目标若出磁盾，立刻暴毙；否则无事发生。无伤害。' },
+
+    { id: 'busi', name: '不死', cost: 0, kind: 'defense', def: 1, icon: '💚', gift: { feimei: 1 },
+      desc: '防御 1，不耗点数，赠送 1 个肥美。' },
+    { id: 'xiaofang', name: '小防', cost: 0, kind: 'defense', def: 2, icon: '🛡️', desc: '防御 2，不耗点数。' },
+    { id: 'dafang', name: '大防', cost: 1, kind: 'defense', def: 3, icon: '🛡', desc: '防御 3，消耗 1 点。' },
+    { id: 'cidun', name: '磁盾', cost: 2, kind: 'defense', def: 5, icon: '🧿', desc: '防御 5，消耗 2 点。会躲磁暴。' },
+    { id: 'heidong', name: '黑洞', cost: 4, kind: 'defense', def: 8, icon: '🕳️', desc: '防御 8，消耗 4 点。' },
+    { id: 'baidong', name: '白洞', cost: 6, kind: 'defense', def: Infinity, icon: '⚪', desc: '无穷防御，消耗 6 点。' },
+
+    { id: 'xiaofan', name: '小反', cost: 1, kind: 'reverse', range: 2, icon: '🪃', desc: '弹性范围 2 点伤害。' },
+    { id: 'dafan', name: '大反', cost: 2, kind: 'reverse', range: 4, icon: '🪃', desc: '弹性范围 4 点伤害。' },
+    { id: 'chaofan', name: '超反', cost: 3, kind: 'reverse', range: 6.5, icon: '🪃', desc: '弹性范围 6.5 点伤害。' },
+
+    { id: 'tou', name: '偷', cost: 0, kind: 'steal', specialDef: 0.5, multiTarget: true, icon: '🫳',
+      desc: '不耗点数。本回合防御固定 0.5。指定若干对象：其中有人「集」，就偷走他全部点数（含刚集的）；' +
+            '有人出防/反盾/自守/合掌，你立刻暴毙；其他人无事发生。' },
+
+    /* ---------- 血量拓展 ---------- */
+    { id: 'hezhang', name: '合掌', cost: 2, costFn: p => (p.hp > 1 ? 3 : 2), kind: 'heal', heal: 1, def: 1,
+      icon: '🙏', pack: 'hp', desc: '血量 +1，本回合防御 1。血量大于 1 时消耗 3 点，否则 2 点。' },
+    { id: 'podun', name: '破盾', cost: 1, kind: 'attack', atk: 0.5, shieldBreak: true, icon: '🪓', pack: 'hp',
+      desc: '伤害 0.5；若含破盾的攻击打得对方扣血，则清空对方血量。' },
+
+    /* ---------- 自守拓展 ---------- */
+    { id: 'zishou', name: '自守', cost: 1, kind: 'selfguard', def: 1, icon: '🧘', pack: 'self',
+      desc: '消耗 1 点，本回合防御 1；之后五回合内若死亡，改为和所有直接致死者发起决斗。' },
+    { id: 'du', name: '毒', cost: 2, kind: 'attack', atk: 1.5, poison: true, icon: '☠️', pack: 'self',
+      desc: '伤害 1.5，消耗 2 点。若含毒的伤害打在自守状态或正在自守的玩家上，该玩家立刻暴毙（无视自守）。' }
+  ];
+
+  const ITEMS = {};
+  ITEM_LIST.forEach(it => { ITEMS[it.id] = it; });
+
+  const GIFT_IDS = ['jingxue', 'jianqi', 'tianlei', 'feimei'];
+  // 会让「偷」当场暴毙的东西：防、反盾、自守、合掌
+  const STEAL_GATE_KINDS = ['defense', 'reverse', 'selfguard', 'heal'];
+  const PACK_KEYS = ['hp', 'rainbow', 'self'];
+  const PACK_NAMES = { hp: '血量拓展', rainbow: '彩虹斩叠加', self: '自守拓展' };
+
+  /* ------------------------------------------------------------ 小工具 */
+  const num = v => (typeof v === 'number' && isFinite(v) ? v : 0);
+  const countOf = (items, id) => Math.max(0, Math.floor(num(items[id])));
+  const round2 = v => Math.round(v * 100) / 100;
+  const clone = o => JSON.parse(JSON.stringify(o));
+
+  function emptyPicks() { return { items: {}, alloc: {}, steal: [] }; }
+
+  function makePlayer(id, name, opts) {
+    opts = opts || {};
+    return {
+      id: id, name: name || id,
+      isHost: !!opts.isHost, isBot: !!opts.isBot, connected: opts.connected !== false,
+      alive: true, hp: 0, points: 0,
+      bag: { jingxue: 0, jianqi: 0, tianlei: 0, feimei: 0 },
+      picks: emptyPicks(), submitted: false,
+      selfGuardUntil: -1,     // 自守保护到第几回合（含）
+      selfGuardTriggered: false,
+      inDuel: false, duel: null
+    };
+  }
+
+  function newState(settings) {
+    const s = {
+      players: [], round: 1, phase: 'lobby', winner: null,
+      settings: Object.assign({ selectSec: 60, revealSec: 12, autoAdvance: true, packs: {} }, settings || {}),
+      log: [], lastResult: null
+    };
+    PACK_KEYS.forEach(k => { if (typeof s.settings.packs[k] !== 'boolean') s.settings.packs[k] = false; });
+    return s;
+  }
+
+  function addPlayer(state, id, name, opts) {
+    if (state.players.some(p => p.id === id)) return state.players.find(p => p.id === id);
+    const p = makePlayer(id, name, opts);
+    state.players.push(p);
+    return p;
+  }
+
+  const getPlayer = (state, id) => state.players.find(p => p.id === id) || null;
+  const alivePlayers = state => state.players.filter(p => p.alive);
+  const otherAlive = (state, id) => state.players.filter(p => p.alive && p.id !== id);
+
+  function packOn(state, id) {
+    const it = ITEMS[id];
+    if (!it || !it.pack) return true;
+    return !!state.settings.packs[it.pack];
+  }
+
+  /* ------------------------------------------------------ 费用与合法性校验 */
+  /** 单件道具本回合的实际单价（合掌是动态价） */
+  function unitCost(state, p, id) {
+    const it = ITEMS[id];
+    if (!it) return 0;
+    return it.costFn ? it.costFn(p) : it.cost;
+  }
+
+  /** 本回合买这些东西要花多少点数 */
+  function totalCost(state, p, items) {
+    let sum = 0;
+    ITEMS && Object.keys(items).forEach(id => {
+      const c = countOf(items, id);
+      if (c > 0) sum += unitCost(state, p, id) * c;
+    });
+    return sum;
+  }
+
+  /** 本回合可用点数 = 手上的 + 本回合「集」的（集先入账） */
+  function usablePoints(state, p, items) {
+    return p.points + countOf(items, 'ji');
+  }
+
+  /**
+   * 校验一份出招。
+   * @returns {{ok:boolean, errors:string[], cost:number, usable:number}}
+   */
+  function validate(state, playerId, action) {
+    const p = getPlayer(state, playerId);
+    const errors = [];
+    const items = (action && action.items) || {};
+    const alloc = (action && action.alloc) || {};
+    const steal = (action && action.steal) || [];
+    if (!p) return { ok: false, errors: ['玩家不存在'], cost: 0, usable: 0 };
+    if (!p.alive) return { ok: false, errors: ['你已经出局了'], cost: 0, usable: 0 };
+
+    const others = otherAlive(state, p.id).map(o => o.id);
+    const alives = alivePlayers(state).map(o => o.id);
+
+    Object.keys(items).forEach(id => {
+      const it = ITEMS[id];
+      const c = countOf(items, id);
+      if (!it) { errors.push('未知道具 ' + id); return; }
+      if (c <= 0) return;
+      if (!packOn(state, id)) { errors.push(`「${it.name}」属于${PACK_NAMES[it.pack]}，本局未开启`); return; }
+      if (it.giftOnly && c > num(p.bag[id])) errors.push(`「${it.name}」只剩 ${num(p.bag[id])} 个`);
+      if (it.consume) {
+        Object.keys(it.consume).forEach(need => {
+          if (c * it.consume[need] > num(p.bag[need])) {
+            errors.push(`「${it.name}」需要 ${c * it.consume[need]} 个${ITEMS[need].name}，你只有 ${num(p.bag[need])} 个`);
+          }
+        });
+      }
+      if (id === 'caihong' && !state.settings.packs.rainbow && c > 1) {
+        errors.push('「彩虹斩」基础规则每回合限 1 个（房主可开启彩虹斩叠加）');
+      }
+      if (id === 'zishou') {
+        if (p.inDuel) errors.push('决斗期间不能开自守');
+        else if (isDuelTarget(state, p.id)) errors.push('你正在被决斗，决斗期间不能开自守');
+      }
+      // 目标分配
+      if (it.kind === 'attack' || it.kind === 'smite') {
+        const t = alloc[id] || {};
+        const keys = Object.keys(t).filter(k => num(t[k]) > 0);
+        const total = keys.reduce((s, k) => s + Math.floor(num(t[k])), 0);
+        if (total !== c) errors.push(`「${it.name}」买了 ${c} 个，但只分配了 ${total} 个目标`);
+        keys.forEach(k => { if (others.indexOf(k) < 0) errors.push(`「${it.name}」的目标无效`); });
+      }
+      if (it.kind === 'steal') {
+        const t = Array.from(new Set(steal)).filter(k => alives.indexOf(k) >= 0 && k !== p.id);
+        if (!t.length) errors.push('「偷」至少要指定一个对象');
+      }
+    });
+
+    Object.keys(alloc).forEach(id => { if (!countOf(items, id) && ITEMS[id]) errors.push(`没有购买「${ITEMS[id].name}」，却分配了目标`); });
+
+    const cost = totalCost(state, p, items);
+    const usable = usablePoints(state, p, items);
+    if (cost > usable + EPS) errors.push(`点数不够：需要 ${round2(cost)} 点，本回合可用 ${round2(usable)} 点`);
+
+    return { ok: errors.length === 0, errors: errors, cost: cost, usable: usable };
+  }
+
+  /** 把提交上来的出招规整成内部格式（丢弃非法目标、补齐数值） */
+  function normalize(state, playerId, action) {
+    const p = getPlayer(state, playerId);
+    const out = emptyPicks();
+    if (!p || !action) return out;
+    const items = action.items || {};
+    const alloc = action.alloc || {};
+    const others = otherAlive(state, p.id).map(o => o.id);
+    Object.keys(items).forEach(id => {
+      const c = countOf(items, id);
+      if (c > 0 && ITEMS[id] && packOn(state, id)) out.items[id] = c;
+    });
+    Object.keys(alloc).forEach(id => {
+      if (!out.items[id]) return;
+      Object.keys(alloc[id] || {}).forEach(tid => {
+        const n = Math.floor(num(alloc[id][tid]));
+        if (n > 0 && others.indexOf(tid) >= 0) {
+          if (!out.alloc[id]) out.alloc[id] = {};
+          out.alloc[id][tid] = n;
+        }
+      });
+    });
+    if (out.items.tou) {
+      out.steal = Array.from(new Set((action.steal || []).filter(k => others.indexOf(k) >= 0)));
+    }
+    return out;
+  }
+
+  function isDuelTarget(state, id) {
+    return state.players.some(o => o.alive && o.inDuel && o.duel &&
+      o.duel.targets.indexOf(id) >= 0 && o.duel.cleared.indexOf(id) < 0);
+  }
+
+  /* =========================================================== 回合结算 */
+  /**
+   * 结算一个回合：把每个玩家 picks 变成实际结果，直接改 state。
+   * @returns {object} 本回合战报（给展示阶段用）
+   */
+  function settle(state) {
+    const round = state.round;
+    const log = [];
+    const say = t => log.push(`R${round} ${t}`);
+
+    // 0) 快照出招（结算期间不再变化）
+    state.players.forEach(p => {
+      p.roundData = {
+        id: p.id, name: p.name, alive: true, items: {}, alloc: {}, steal: [],
+        cost: 0, def: 0, gross: 0, damage: 0, hpBefore: p.hp, hpAfter: p.hp,
+        events: [], giftGained: {}, stolenFrom: [], stolenBy: [], dead: false, deathCause: ''
+      };
+      if (!p.alive) { p.roundData.alive = false; return; }
+      p.roundData.items = clone(p.picks.items || {});
+      p.roundData.alloc = clone(p.picks.alloc || {});
+      p.roundData.steal = (p.picks.steal || []).slice();
+    });
+    const rd = id => getPlayer(state, id).roundData;
+    const alive = () => state.players.filter(p => p.alive);
+
+    /* 1) 「集」先入账，再扣费（可透支刚集的点） */
+    alive().forEach(p => {
+      const n = countOf(p.roundData.items, 'ji');
+      if (n > 0) { p.points += n; rd(p.id).events.push(`集 ×${n} → 点数 +${n}`); }
+    });
+    alive().forEach(p => {
+      const cost = totalCost(state, p, p.roundData.items);
+      p.roundData.cost = cost;
+      p.points -= cost;
+      if (p.points < 0) p.points = 0;   // 正常不会发生（提交时已校验）
+      // 消耗赠品 / 背包材料
+      Object.keys(p.roundData.items).forEach(id => {
+        const c = countOf(p.roundData.items, id);
+        const it = ITEMS[id];
+        if (!it) return;
+        if (it.giftOnly) p.bag[id] = Math.max(0, num(p.bag[id]) - c);
+        if (it.consume) Object.keys(it.consume).forEach(k => { p.bag[k] = Math.max(0, num(p.bag[k]) - c * it.consume[k]); });
+      });
+      if (cost > 0) rd(p.id).events.push(`消耗 ${round2(cost)} 点`);
+      // 「偷」把防御锁成 0.5
+      if (countOf(p.roundData.items, 'tou') > 0) { p.roundData.defOverride = ITEMS.tou.specialDef; }
+    });
+
+    /* 2) 偷：先处理（点数转移 + 暴毙） */
+    alive().forEach(thief => {
+      if (!countOf(thief.roundData.items, 'tou')) return;
+      const targets = Array.from(new Set(thief.roundData.steal));
+      if (!targets.length) { rd(thief.id).events.push('偷：没有指定对象'); return; }
+      for (let i = 0; i < targets.length; i++) {
+        const t = getPlayer(state, targets[i]);
+        if (!t || !t.alive) continue;
+        const gated = Object.keys(t.roundData.items).some(id =>
+          STEAL_GATE_KINDS.indexOf(ITEMS[id] && ITEMS[id].kind) >= 0);
+        if (gated) {
+          rd(thief.id).events.push(`偷 ${t.name} 被识破 → 立刻暴毙`);
+          say(`${thief.name} 偷 ${t.name} 撞上防御/反盾/自守/合掌，当场暴毙`);
+          killPlayer(state, thief, `偷 ${t.name} 被识破`, [], { noSelfGuard: true });
+          break;
+        }
+        if (countOf(t.roundData.items, 'ji') > 0) {
+          const amt = t.points;
+          t.points = 0; thief.points += amt;
+          rd(thief.id).stolenFrom.push({ id: t.id, name: t.name, amount: amt });
+          rd(t.id).stolenBy.push({ id: thief.id, name: thief.name, amount: amt });
+          rd(thief.id).events.push(`偷走 ${t.name} 全部点数 ${round2(amt)} 点`);
+          rd(t.id).events.push(`被 ${thief.name} 偷走 ${round2(amt)} 点`);
+          say(`${thief.name} 偷走 ${t.name} 的 ${round2(amt)} 点`);
+        } else {
+          rd(thief.id).events.push(`偷 ${t.name}：他在做别的事，无事发生`);
+        }
+      }
+    });
+
+    /* 3) 各人防御 */
+    alive().forEach(p => {
+      let d = 0;
+      Object.keys(p.roundData.items).forEach(id => {
+        const it = ITEMS[id], c = countOf(p.roundData.items, id);
+        if (it && (it.kind === 'defense' || it.kind === 'heal' || it.kind === 'selfguard') && it.def) d += it.def * c;
+      });
+      if (p.roundData.defOverride != null) d = p.roundData.defOverride;   // 偷 → 0.5
+      p.roundData.def = d;
+      if (countOf(p.roundData.items, 'zishou') > 0) {
+        p.selfGuardUntil = Math.max(p.selfGuardUntil, round + 5);
+        rd(p.id).events.push(`开自守（防御 1，保护至第 ${round + 5} 回合）`);
+      }
+    });
+
+    /* 4) 统计每个目标挨的总攻击 */
+    const flags = {};   // targetId -> {rainbow, poison, podun, attackers:{id:dmg}}
+    const flagOf = id => (flags[id] = flags[id] || { rainbow: false, poison: false, podun: false, attackers: {} });
+
+    alive().forEach(src => {
+      Object.keys(src.roundData.items).forEach(id => {
+        const it = ITEMS[id], c = countOf(src.roundData.items, id);
+        if (!it || it.kind !== 'attack' || c <= 0) return;
+        const alloc = src.roundData.alloc[id] || {};
+        Object.keys(alloc).forEach(tid => {
+          const t = getPlayer(state, tid);
+          const n = Math.floor(num(alloc[tid]));
+          if (!t || n <= 0) return;
+          let per = it.atk;
+          if (it.weakVs && it.weakVs.some(w => countOf(t.roundData.items, w) > 0)) per = it.weakAtk;
+          const dmg = per * n;
+          t.roundData.gross += dmg;
+          const f = flagOf(tid);
+          f.attackers[src.id] = (f.attackers[src.id] || 0) + dmg;
+          if (it.lethal) f.rainbow = true;
+          if (it.poison) f.poison = true;
+          if (it.shieldBreak) f.podun = true;
+        });
+      });
+    });
+
+    /* 5) 反盾：够软就弹死所有攻击者，超限就自己被崩死 */
+    alive().forEach(p => {
+      const ranges = Object.keys(p.roundData.items)
+        .filter(id => ITEMS[id].kind === 'reverse' && countOf(p.roundData.items, id) > 0)
+        .map(id => ITEMS[id].range);
+      if (!ranges.length) return;
+      const range = Math.max.apply(null, ranges);   // 反盾不叠加，取最大值
+      const g = p.roundData.gross;
+      const f = flags[p.id] || { attackers: {} };
+      if (g > EPS && g <= range + EPS) {
+        p.roundData.reverse = { range: range, success: true };
+        const attackers = Object.keys(f.attackers);
+        rd(p.id).events.push(`反盾成功（${round2(g)} ≤ ${range}）→ 弹死 ${attackers.length} 个攻击者`);
+        say(`${p.name} 反盾弹开 ${round2(g)} 点伤害，反杀：${attackers.map(a => getPlayer(state, a).name).join('、') || '（无人）'}`);
+        attackers.forEach(aid => {
+          const a = getPlayer(state, aid);
+          if (a && a.alive) killPlayer(state, a, `被 ${p.name} 的反盾弹死`, [p.id], { lethalOnly: true });
+        });
+        p.roundData.damage = 0;
+      } else if (g > range + EPS) {
+        p.roundData.reverse = { range: range, success: false };
+        rd(p.id).events.push(`反盾被破（${round2(g)} > ${range}）→ 反盾者暴毙`);
+        say(`${p.name} 的反盾被 ${round2(g)} 点攻击冲破，当场暴毙`);
+        killPlayer(state, p, '反盾被破', Object.keys(f.attackers), { lethalOnly: true, noSelfGuard: false });
+      }
+    });
+
+    /* 6) 伤害结算 */
+    alive().forEach(p => {
+      const data = p.roundData;
+      if (data.reverse && data.reverse.success) return;    // 弹开，免伤
+      const g = data.gross;
+      const dmg = g - data.def;                             // 白洞 → -Infinity
+      if (!(dmg > EPS)) { data.damage = 0; if (g > EPS) data.events.push(`防御 ${fmtNum(data.def)} 挡下 ${round2(g)} 点攻击`); return; }
+      data.damage = dmg;
+      const f = flags[p.id] || { attackers: {} };
+      const killers = Object.keys(f.attackers);
+      if (data.hpBefore - dmg < -EPS) {
+        data.hpAfter = 0;
+        data.events.push(`受到 ${round2(dmg)} 点伤害 → 血量 ${fmtNum(data.hpBefore)} 撑不住`);
+        killPlayer(state, p, `被 ${round2(dmg)} 点伤害打死`, killers, {});
+      } else {
+        data.hpAfter = data.hpBefore - dmg;
+        data.events.push(`受到 ${round2(dmg)} 点伤害 → 血量 ${fmtNum(data.hpBefore)} → ${fmtNum(data.hpAfter)}`);
+        if (f.podun) { data.hpAfter = 0; data.events.push('破盾生效 → 血量清零'); }
+      }
+      if (f.rainbow) {
+        data.events.push('彩虹斩命中 → 立即死亡（无视血量与自守）');
+        killPlayer(state, p, '被彩虹斩斩中', killers, { pierceSelfGuard: true });
+      }
+      if (f.poison && (countOf(data.items, 'zishou') > 0 || p.inDuel || p.selfGuardUntil >= round)) {
+        data.events.push('毒命中自守状态 → 立刻暴毙');
+        killPlayer(state, p, '毒破自守', killers, { pierceSelfGuard: true });
+      }
+    });
+
+    /* 7) 磁暴：目标出磁盾就暴毙 */
+    alive().forEach(src => {
+      const c = countOf(src.roundData.items, 'cibao');
+      if (!c) return;
+      const alloc = src.roundData.alloc.cibao || {};
+      Object.keys(alloc).forEach(tid => {
+        const t = getPlayer(state, tid);
+        if (!t || !t.alive) return;
+        if (num(alloc[tid]) > 0 && countOf(t.roundData.items, 'cidun') > 0) {
+          t.roundData.events.push(`${src.name} 的磁暴命中磁盾 → 立刻暴毙`);
+          say(`${src.name} 用磁暴劈碎了 ${t.name} 的磁盾，${t.name} 当场暴毙`);
+          killPlayer(state, t, '被磁暴破盾', [src.id], {});
+        }
+      });
+    });
+
+    /* 8) 写回血量、复活/决斗清算、赠品发放 */
+    alive().forEach(p => {
+      const d = p.roundData;
+      if (d.damage > 0 && !d.dead) p.hp = Math.max(0, d.hpAfter);
+      if (countOf(d.items, 'hezhang') > 0) {
+        p.hp += ITEMS.hezhang.heal * countOf(d.items, 'hezhang');
+        d.events.push(`合掌 → 血量 +${ITEMS.hezhang.heal * countOf(d.items, 'hezhang')}`);
+      }
+      // 赠品
+      Object.keys(d.items).forEach(id => {
+        const it = ITEMS[id], c = countOf(d.items, id);
+        if (!it || !it.gift) return;
+        Object.keys(it.gift).forEach(g => {
+          p.bag[g] = num(p.bag[g]) + it.gift[g] * c;
+          d.giftGained[g] = (d.giftGained[g] || 0) + it.gift[g] * c;
+        });
+      });
+      if (Object.keys(d.giftGained).length) {
+        d.events.push('获得赠品：' + Object.keys(d.giftGained).map(g => `${ITEMS[g].name}×${d.giftGained[g]}`).join('、'));
+      }
+    });
+
+    /* 8.5) 决斗计时（复活 / 超时真死） */
+    tickDuels(state);
+
+    /* 9) 回合末统一清空（下回合清零） */
+    state.players.forEach(p => {
+      p.picks = emptyPicks();
+      p.submitted = false;
+    });
+
+    const result = {
+      round: round,
+      order: state.players.map(p => p.id),
+      reports: state.players.map(p => clone(p.roundData)),
+      winnersHint: alivePlayers(state).map(p => p.id)
+    };
+    state.players.forEach(p => { delete p.roundData; });
+
+    /* 10) 胜负 */
+    const left = alivePlayers(state);
+    if (left.length <= 1) {
+      state.phase = 'over';
+      state.winner = left.length === 1 ? left[0].id : null;
+      say(left.length === 1 ? `🏆 ${left[0].name} 拔得头筹！` : '全员阵亡，平局');
+    }
+
+    state.log = state.log.concat(log).slice(-200);
+    state.lastResult = result;
+    // 回合数由结算内部推进，避免"调用方忘记加一"导致决斗计时永不走动
+    state.round = round + 1;
+    // 安静的回合也要留个脚印，否则读日志的人会以为卡住了
+    state.log.push(`R${round} 结算完成 · 存活 ${left.length} 人`);
+    return result;
+  }
+
+  function fmtNum(v) { return v === Infinity ? '∞' : String(round2(v)); }
+
+  /* --------------------------------------------------- 死亡 / 自守 / 决斗 */
+  /**
+   * 处理一次死亡。带自守保护的人不会真死，而是进入决斗。
+   * opts.pierceSelfGuard: 彩虹斩 / 毒 这类无视自守的死因
+   * opts.noSelfGuard: 偷被识破（自守救不了，规则未提及，按真死处理）
+   */
+  function killPlayer(state, p, cause, killerIds, opts) {
+    opts = opts || {};
+    if (!p || !p.alive) return;
+    const data = p.roundData;
+    const round = state.round;
+    if (data) { data.dead = true; data.deathCause = cause; }
+    const killers = Array.from(new Set((killerIds || []).filter(k => k && k !== p.id && getPlayer(state, k) && getPlayer(state, k).alive)));
+    const guarded = !opts.pierceSelfGuard && !opts.noSelfGuard && !p.inDuel && p.selfGuardUntil >= round;
+
+    if (guarded && killers.length > 0) {
+      // 自守生效 → 改用决斗续命
+      const n = killers.length;
+      p.inDuel = true;
+      p.hp = 0;
+      p.selfGuardTriggered = true;
+      p.duel = { targets: killers.slice(), cleared: [], total: 4 * n + 1, left: 4 * n + 1, startRound: round };
+      if (data) data.events.push(`自守触发 → 与 ${killers.map(k => getPlayer(state, k).name).join('、')} 进入决斗（${4 * n + 1} 回合内杀光他们）`);
+      state.log.push(`R${round} ${p.name} 死亡被自守挡下，向 ${killers.map(k => getPlayer(state, k).name).join('、')} 发起决斗`);
+      return;
+    }
+    // 真死
+    p.alive = false;
+    p.inDuel = false;
+    p.duel = null;
+    p.hp = 0;
+    p.points = 0;
+    p.bag = { jingxue: 0, jianqi: 0, tianlei: 0, feimei: 0 };
+    p.picks = emptyPicks();
+    p.submitted = false;
+    if (data) data.events.push(`☠️ 阵亡：${cause}`);
+    state.log.push(`R${round} ${p.name} 阵亡 —— ${cause}`);
+  }
+
+  /** 回合末推进决斗计时：杀光目标 = 复活，超时 = 真死 */
+  function tickDuels(state) {
+    state.players.filter(p => p.alive && p.inDuel && p.duel).forEach(p => {
+      // 「杀光一遍」：目标真死，或目标自己触发了自守（也算一遍）
+      const cleared = p.duel.targets.filter(tid => {
+        const t = getPlayer(state, tid);
+        return !t || !t.alive || t.selfGuardTriggered;
+      });
+      p.duel.cleared = cleared;
+      if (cleared.length >= p.duel.targets.length) {
+        p.inDuel = false;
+        p.duel = null;
+        p.hp = 0;
+        state.log.push(`R${state.round} ${p.name} 决斗成功，复活（血量 0）`);
+        return;
+      }
+      if (state.round <= p.duel.startRound) return;   // 发起决斗的当回合不扣名额
+      p.duel.left -= 1;
+      if (p.duel.left <= 0) {
+        state.log.push(`R${state.round} ${p.name} 决斗超时，真正死亡`);
+        killPlayer(state, p, '决斗超时未杀光对手', [], { noSelfGuard: true });
+      }
+    });
+  }
+
+  /* ------------------------------------------------------------ 展示辅助 */
+  /** 把某人的出招翻译成人话，用于展示阶段 */
+  function describePicks(state, picks) {
+    const parts = [];
+    const items = (picks && picks.items) || {};
+    const alloc = (picks && picks.alloc) || {};
+    Object.keys(items).forEach(id => {
+      const it = ITEMS[id], c = countOf(items, id);
+      if (!it || c <= 0) return;
+      if (it.kind === 'attack' || it.kind === 'smite') {
+        const map = alloc[id] || {};
+        const list = Object.keys(map).filter(k => num(map[k]) > 0)
+          .map(k => `${nameOf(state, k)}×${Math.floor(num(map[k]))}`);
+        parts.push(`${it.name}×${c}${list.length ? ' → ' + list.join(' ') : ''}`);
+      } else if (it.kind === 'steal') {
+        parts.push(`${it.name} → ${(picks.steal || []).map(k => nameOf(state, k)).join(' ')}`);
+      } else {
+        parts.push(`${it.name}×${c}`);
+      }
+    });
+    return parts.length ? parts.join('，') : '（空手）';
+  }
+
+  function nameOf(state, id) {
+    const p = getPlayer(state, id);
+    return p ? p.name : '???';
+  }
+
+  /* ------------------------------------------------------------- 电脑玩家 */
+  const BOT_ATTACKS = ['yidao', 'shuangdao', 'shangdiao', 'sidao', 'wudao'];
+  function botAction(state, id, rng) {
+    const p = getPlayer(state, id);
+    rng = rng || Math.random;
+    const picks = emptyPicks();
+    if (!p || !p.alive) return picks;
+    const foes = otherAlive(state, id);
+    if (!foes.length) return picks;
+
+    // 有赠品就顺手用掉
+    if (p.bag.jianqi > 0 && rng() < 0.7) picks.items.jianqi = p.bag.jianqi;
+    if (p.bag.tianlei > 0 && rng() < 0.7) picks.items.tianlei = p.bag.tianlei;
+    if (p.bag.jingxue > 0 && rng() < 0.5) picks.items.jingxue = p.bag.jingxue;
+    if (p.bag.feimei >= 3 && rng() < 0.4) picks.items.diefei = Math.floor(p.bag.feimei / 3);
+
+    if (p.points <= 1 || rng() < 0.25) picks.items.ji = 1;
+    // 免费防具
+    if (rng() < 0.45) picks.items[['busi', 'xiaofang'][Math.floor(rng() * 2)]] = 1;
+
+    let budget = p.points + (picks.items.ji || 0);
+    const spend = it => { if (budget >= ITEMS[it].cost) { budget -= ITEMS[it].cost; return true; } return false; };
+
+    while (budget > 0) {
+      const cand = BOT_ATTACKS.filter(a => ITEMS[a].cost <= budget);
+      if (!cand.length) break;
+      let id2 = cand[Math.floor(rng() * cand.length)];
+      if (budget >= 4 && rng() < 0.3) id2 = 'sidao';
+      if (rng() < 0.12 && state.settings.packs.hp && budget >= ITEMS.hezhang.cost) { picks.items.hezhang = (picks.items.hezhang || 0) + 1; budget -= ITEMS.hezhang.costFn(p); continue; }
+      if (!spend(id2)) break;
+      picks.items[id2] = (picks.items[id2] || 0) + 1;
+    }
+    // 高点数时偶尔上盾/反盾
+    if (p.points >= 6 && rng() < 0.35) {
+      const shield = ['heidong', 'baidong', 'cidun'][Math.floor(rng() * 3)];
+      const c = ITEMS[shield].cost;
+      if (budget >= c) { picks.items[shield] = 1; budget -= c; }
+    } else if (p.points >= 1 && rng() < 0.2) {
+      const rev = ['xiaofan', 'dafan', 'chaofan'][Math.floor(rng() * 3)];
+      if (budget >= ITEMS[rev].cost) { picks.items[rev] = 1; budget -= ITEMS[rev].cost; }
+    }
+
+    // 分配目标：优先打血少 / 点数多的
+    Object.keys(picks.items).forEach(iid => {
+      const it = ITEMS[iid];
+      if (it.kind !== 'attack') return;
+      const c = picks.items[iid];
+      const sorted = foes.slice().sort((a, b) => (a.hp * 10 + a.points) - (b.hp * 10 + b.points));
+      const alloc = {};
+      let left = c;
+      const picksTargets = sorted.slice(0, Math.min(sorted.length, 1 + Math.floor(rng() * 2)));
+      while (left > 0) {
+        const t = picksTargets[Math.floor(rng() * picksTargets.length)];
+        alloc[t.id] = (alloc[t.id] || 0) + 1;
+        left--;
+      }
+      picks.alloc[iid] = alloc;
+    });
+    return normalize(state, id, picks);
+  }
+
+  /* --------------------------------------------------- 对外只读状态（发网） */
+  /** 隐藏别人的未公开出招；展示阶段才带出招和战报 */
+  function publicState(state, opts) {
+    opts = opts || {};
+    const reveal = state.phase === 'reveal' || state.phase === 'over';
+    const s = {
+      round: state.round, phase: state.phase, winner: state.winner,
+      settings: state.settings, hostId: state.hostId,
+      selectSec: state.settings.selectSec, revealSec: state.settings.revealSec,
+      players: state.players.map(p => {
+        const o = {
+          id: p.id, name: p.name, isHost: p.isHost, isBot: p.isBot, connected: p.connected,
+          alive: p.alive, hp: p.hp, points: p.points, bag: p.bag, submitted: p.submitted,
+          inDuel: p.inDuel, duel: p.duel, selfGuardUntil: p.selfGuardUntil
+        };
+        if (reveal) o.picks = p.picks;
+        return o;
+      }),
+      log: state.log.slice(-60),
+      lastResult: reveal ? state.lastResult : null
+    };
+    return s;
+  }
+
+  return {
+    EPS: EPS, ITEM_LIST: ITEM_LIST, ITEMS: ITEMS, PACK_KEYS: PACK_KEYS, PACK_NAMES: PACK_NAMES,
+    GIFT_IDS: GIFT_IDS,
+    newState: newState, addPlayer: addPlayer, getPlayer: getPlayer,
+    alivePlayers: alivePlayers, otherAlive: otherAlive,
+    validate: validate, normalize: normalize, unitCost: unitCost, totalCost: totalCost,
+    usablePoints: usablePoints, emptyPicks: emptyPicks, packOn: packOn,
+    settle: settle, tickDuels: tickDuels, killPlayer: killPlayer,
+    describePicks: describePicks, publicState: publicState, botAction: botAction,
+    fmtNum: fmtNum, round2: round2, countOf: countOf, isDuelTarget: isDuelTarget
+  };
+})();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = BADAO;
+</script>
+<script>/* ============================================================================
+ * 拔刀 · 界面层（渲染 + 交互）
+ * 只读 app.pub（主机广播的公开状态），自己那份草稿存在本地 draft 里。
+ * ==========================================================================*/
+const VIEW = (function () {
+  'use strict';
+  const B = BADAO;
+
+  const app = {
+    mode: 'home',      // home | room | game
+    status: '',        // 顶部连接状态
+    roomCode: '',
+    me: null,
+    isHost: false,
+    pub: null,
+    remainMs: 0,
+    remainTotal: 0,
+    err: '',
+    busy: false
+  };
+
+  let draft = { items: {}, alloc: {}, sel: {}, steal: [] };
+  let draftFor = -1;
+  let tab = 'attack';
+  let sheet = null;          // null | 'rules' | 'log' | {alloc:'itemId'} | 'roominfo'
+  let lastSig = '';
+
+  /* ---------------------------------------------------------------- 小工具 */
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pct = (a, b) => (b > 0 ? Math.max(0, Math.min(100, a / b * 100)) : 0);
+
+  /** 血量显示：0 血是常态；叠肥的 2-ε 会留下"一丝血"，单独标出来 */
+  function fmtHp(v) {
+    if (v > 0 && v < 1e-6) return 'ε';
+    if (!isFinite(v)) return '∞';
+    return String(B.round2(v));
+  }
+  function fmtNum(v) { return isFinite(v) ? String(B.round2(v)) : '∞'; }
+  function secText(ms) { return (Math.max(0, ms) / 1000).toFixed(1); }
+
+  const AVATAR_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#0891b2', '#ec4899', '#65a30d'];
+  function avatarOf(p) {
+    let h = 0;
+    for (let i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) % 997;
+    return AVATAR_COLORS[h % AVATAR_COLORS.length];
+  }
+  function initial(name) { return esc((name || '?').trim().slice(0, 1)); }
+
+  function mePlayer() {
+    return app.pub ? app.pub.players.find(p => p.id === app.me) || null : null;
+  }
+  function canAct() {
+    const me = mePlayer();
+    return !!(app.pub && app.pub.phase === 'select' && me && me.alive);
+  }
+
+  /* -------------------------------------------------------------- 草稿管理 */
+  function syncDraftRound() {
+    if (!app.pub) return;
+    if (app.pub.round !== draftFor) {
+      draftFor = app.pub.round;
+      draft = { items: {}, alloc: {}, sel: {}, steal: [] };
+    }
+  }
+  const foes = () => (app.pub ? app.pub.players.filter(p => p.alive && p.id !== app.me) : []);
+
+  /** 清掉草稿里已经失效的目标（对象已死 / 已退出），否则会卡住提交流程 */
+  function pruneDraft() {
+    if (!app.pub) return;
+    const ids = foes().map(p => p.id);
+    draft.steal = draft.steal.filter(id => ids.indexOf(id) >= 0);
+    Object.keys(draft.sel).forEach(k => {
+      draft.sel[k] = draft.sel[k].filter(id => ids.indexOf(id) >= 0);
+      if (!draft.sel[k].length) { delete draft.sel[k]; delete draft.alloc[k]; }
+      else recomputeAlloc(k);
+    });
+  }
+
+  function count(id) { return draft.items[id] || 0; }
+
+  /** 把「选中的头像」平均分成目标分配：买了 n 个、选中 m 人 → 每人 ⌊n/m⌋，余数给先选的 */
+  function recomputeAlloc(id) {
+    const it = B.ITEMS[id];
+    if (!it || (it.kind !== 'attack' && it.kind !== 'smite')) return;
+    const n = count(id);
+    const ids = foes().map(p => p.id);
+    const sel = (draft.sel[id] || []).filter(t => ids.indexOf(t) >= 0).slice(0, Math.max(1, n));
+    draft.sel[id] = sel;
+    const out = {};
+    if (n > 0 && sel.length) {
+      const base = Math.floor(n / sel.length), rem = n % sel.length;
+      sel.forEach((t, i) => { const c = base + (i < rem ? 1 : 0); if (c > 0) out[t] = c; });
+    }
+    if (Object.keys(out).length) draft.alloc[id] = out; else delete draft.alloc[id];
+  }
+
+  /** 点头像多选/取消目标 */
+  function toggleTarget(id, tid) {
+    const n = count(id);
+    const sel = draft.sel[id] || (draft.sel[id] = []);
+    const i = sel.indexOf(tid);
+    if (i >= 0) sel.splice(i, 1);
+    else {
+      if (sel.length >= n) { toast(`「${B.ITEMS[id].name}」只有 ${n} 个，想多打一个人就先加数量`); return; }
+      sel.push(tid);
+    }
+    recomputeAlloc(id);
+    render();
+  }
+
+  /** 全选：把这件道具的数量摊到所有人身上 */
+  function pickAll(id) {
+    const n = count(id);
+    const list = foes().map(p => p.id);
+    if (!n) { toast('先加数量'); return; }
+    if (!list.length) { toast('没有可攻击的对象'); return; }
+    if (n < list.length) { toast(`「${B.ITEMS[id].name}」只有 ${n} 个，最多同时打 ${n} 个人`); return; }
+    draft.sel[id] = list.slice();
+    recomputeAlloc(id);
+    render();
+  }
+
+  function setCount(id, n) {
+    const it = B.ITEMS[id];
+    n = Math.max(0, Math.floor(n));
+    if (it && it.giftOnly) n = Math.min(n, mePlayer() ? mePlayer().bag[id] || 0 : 0);
+    if (it && it.consume) {
+      Object.keys(it.consume).forEach(k => {
+        const have = mePlayer() ? mePlayer().bag[k] || 0 : 0;
+        n = Math.min(n, Math.floor(have / it.consume[k]));
+      });
+    }
+    if (it && id === 'caihong' && !packOn('rainbow')) n = Math.min(n, 1);
+    if (id === 'tou') n = Math.min(n, 1);          // 偷不耗点数，一个就够，"不论使用数量"效果相同
+    if (n <= 0) {
+      delete draft.items[id];
+      delete draft.alloc[id];
+      if (id === 'tou') draft.steal = []; else delete draft.sel[id];
+      return;
+    }
+    draft.items[id] = n;
+    if (it.kind === 'attack' || it.kind === 'smite') {
+      const sel = draft.sel[id] || (draft.sel[id] = []);
+      if (!sel.length) { const f = foes(); if (f.length) sel.push(f[0].id); }   // 默认先瞄第一个，随时都能提交
+      sel.length = Math.min(sel.length, n);
+      recomputeAlloc(id);
+    }
+    if (id === 'tou' && !draft.steal.length) {
+      const f = foes();
+      if (f.length) draft.steal = [f[0].id];
+    }
+  }
+
+  const packOn = id => (app.pub ? B.packOn(app.pub, id) : false);
+  const packs = () => (app.pub ? app.pub.settings.packs : { hp: false, rainbow: false, self: false });
+
+  function myCost() {
+    const me = mePlayer();
+    if (!me) return 0;
+    return B.totalCost(app.pub, me, draft.items);
+  }
+  function myUsable() {
+    const me = mePlayer();
+    if (!me) return 0;
+    return B.usablePoints(app.pub, me, draft.items);
+  }
+
+  /* =========================================================== 渲染入口 */
+  function render() {
+    if (app.pub) { syncDraftRound(); }
+    pruneDraft();          // 目标死了 / 退出房间了，就把草稿里的残留清掉
+    const el = $('#app');
+    let html = '';
+    if (app.mode === 'home') html = screenHome();
+    else if (!app.pub || app.pub.phase === 'lobby') html = screenRoom();
+    else html = screenGame();
+    el.innerHTML = html;
+    renderSheet();
+    renderTimer();
+    lastSig = sig();
+  }
+
+  function sig() {
+    if (!app.pub) return app.mode + '|';
+    return app.mode + '|' + app.pub.phase + '|' + app.pub.round + '|' + app.pub.winner + '|' +
+      app.pub.players.map(p => p.id + p.alive + p.hp + p.points + p.submitted + (p.inDuel ? 'd' + (p.duel ? p.duel.left : '') : '') + (p.connected ? 1 : 0)).join(',') +
+      '|' + JSON.stringify(draft) + '|' + tab + '|' + JSON.stringify(sheet) + '|' + app.err;
+  }
+  /** 状态没实质变化就只刷新倒计时，避免打断正在点的按钮 */
+  function softRender() {
+    if (!app.pub || app.mode !== 'game') return render();
+    if (sig() !== lastSig) return render();
+    renderTimer();
+  }
+
+  function renderTimer() {
+    const num = $('#timerNum'), bar = $('#timerBar');
+    if (!num || !app.pub) return;
+    const left = Math.max(0, app.remainMs);
+    num.textContent = secText(left);
+    const warn = left <= 5000 && left > 0;
+    num.classList.toggle('warn', warn);
+    if (bar) {
+      bar.style.width = pct(left, app.remainTotal) + '%';
+      bar.classList.toggle('warn', warn);
+    }
+  }
+
+  /* ---------------------------------------------------------------- 首页 */
+  function screenHome() {
+    return `
+    <div class="wrap">
+      <div class="hero">
+        <h1>拔<span>刀</span></h1>
+        <p>回合制聚会桌游 · 同时出招 · 一回合定生死</p>
+      </div>
+      <div class="card">
+        <label class="small muted">你的昵称</label>
+        <input id="nickInput" class="field" maxlength="8" placeholder="比如：老王" value="${esc(nick())}">
+        <div style="height:12px"></div>
+        <button class="btn primary lg block" data-act="create">创建房间</button>
+        <div class="divider"></div>
+        <label class="small muted">有房间号？</label>
+        <div class="row" style="margin-top:8px">
+          <input id="codeInput" class="field grow" maxlength="6" placeholder="4 位房间号" style="text-transform:uppercase">
+          <button class="btn primary" data-act="join">加入</button>
+        </div>
+        ${app.status ? `<div class="err">${esc(app.status)}</div>` : ''}
+      </div>
+      <div class="card">
+        <div class="row space">
+          <b>怎么玩？</b>
+          <button class="btn sm ghost" data-act="rules">查看完整规则</button>
+        </div>
+        <div class="small muted" style="margin-top:8px">
+          每回合所有人同时选道具和攻击目标，倒计时结束后一起结算。
+          血量从 <b>0</b> 起步，<b>挨到 1 点伤害就会死</b>，全靠防具和反盾活命。
+        </div>
+      </div>
+      <div style="height:24px"></div>
+      <div class="tiny muted" style="text-align:center">开房间在线联机 · 也可以和电脑对战 · 无需下载安装</div>
+    </div>`;
+  }
+
+  /* ---------------------------------------------------------------- 房间 */
+  function screenRoom() {
+    const pub = app.pub;
+    if (!pub) return `<div class="wrap"><div class="card">正在连接房间…</div></div>`;
+    const host = pub.players.find(p => p.isHost);
+    const s = pub.settings;
+    const pk = s.packs || {};
+    return `
+    <div class="topbar"><div class="inner">
+      <b>拔刀</b>
+      <span class="badge blue">房间 ${esc(app.roomCode)}</span>
+      <div class="grow"></div>
+      <button class="btn sm ghost" data-act="rules">规则</button>
+      <button class="btn sm danger" data-act="leave">退出</button>
+    </div></div>
+    <div class="wrap">
+      <div class="card">
+        <div class="row space">
+          <div>
+            <div class="tiny muted">房间号（发给朋友）</div>
+            <div style="font-size:30px;font-weight:800;letter-spacing:.16em">${esc(app.roomCode)}</div>
+          </div>
+          <button class="btn primary" data-act="copy">复制</button>
+        </div>
+        <div class="small muted" style="margin-top:8px">
+          朋友打开同一个网页 → 填房间号 → 加入。房主是 <b>${esc(host ? host.name : '?')}</b>。
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row space">
+          <b>玩家（${pub.players.length}）</b>
+          ${app.isHost ? `<button class="btn sm" data-act="addbot">＋ 电脑玩家</button>` : ''}
+        </div>
+        <ul style="margin-top:8px">
+          ${pub.players.map(p => `
+            <li class="trow">
+              <span class="avatar" style="background:${avatarOf(p)}">${initial(p.name)}</span>
+              <span class="nm ellipsis">${esc(p.name)}</span>
+              ${p.isBot ? '<span class="badge grey">电脑</span>' : ''}
+              ${p.isHost ? '<span class="badge amber">房主</span>' : ''}
+              ${!p.connected ? '<span class="badge red">掉线</span>' : ''}
+              ${p.id === app.me ? '<span class="badge blue">你</span>' : ''}
+              ${app.isHost && p.id !== app.me ? `<button class="btn sm danger" data-act="kick" data-id="${esc(p.id)}">踢</button>` : ''}
+            </li>`).join('')}
+        </ul>
+      </div>
+
+      <div class="card">
+        <b>房间设置</b>
+        ${!app.isHost ? '<div class="tiny muted">只有房主能改</div>' : ''}
+        <div style="margin-top:12px" class="small">
+          <div class="row space">
+            <span>选择时间 x</span>
+            <div class="row">
+              <input class="field" type="number" min="10" max="600" step="5" style="width:88px"
+                     data-set="selectSec" value="${s.selectSec}" ${app.isHost ? '' : 'disabled'}> <span class="muted">秒</span>
+            </div>
+          </div>
+          <div class="row space" style="margin-top:8px">
+            <span>展示时间 y</span>
+            <div class="row">
+              <input class="field" type="number" min="3" max="120" step="1" style="width:88px"
+                     data-set="revealSec" value="${s.revealSec}" ${app.isHost ? '' : 'disabled'}> <span class="muted">秒</span>
+            </div>
+          </div>
+          <div class="row space" style="margin-top:8px">
+            <span>全员锁定后立刻结算</span>
+            <input type="checkbox" data-set="autoAdvance" ${s.autoAdvance ? 'checked' : ''} ${app.isHost ? '' : 'disabled'}>
+          </div>
+          <div class="divider"></div>
+          <div class="row space">
+            <span>血量拓展（合掌 / 破盾）</span>
+            <input type="checkbox" data-set="pack.hp" ${pk.hp ? 'checked' : ''} ${app.isHost ? '' : 'disabled'}>
+          </div>
+          <div class="row space" style="margin-top:8px">
+            <span>彩虹斩叠加（可 n 倍）</span>
+            <input type="checkbox" data-set="pack.rainbow" ${pk.rainbow ? 'checked' : ''} ${app.isHost ? '' : 'disabled'}>
+          </div>
+          <div class="row space" style="margin-top:8px">
+            <span>自守拓展（自守 / 毒）</span>
+            <input type="checkbox" data-set="pack.self" ${pk.self ? 'checked' : ''} ${app.isHost ? '' : 'disabled'}>
+          </div>
+        </div>
+      </div>
+
+      ${app.isHost
+        ? `<button class="btn primary lg block" data-act="start" ${pub.players.length < 2 ? 'disabled' : ''}>
+             ${pub.players.length < 2 ? '至少需要 2 人（可以加电脑）' : '开始游戏'}
+           </button>`
+        : `<div class="card" style="text-align:center">等房主开始游戏…</div>`}
+      ${app.err ? `<div class="err" style="text-align:center">${esc(app.err)}</div>` : ''}
+    </div>`;
+  }
+
+  /* ---------------------------------------------------------------- 对局 */
+  function screenGame() {
+    const pub = app.pub;
+    if (!pub) return `<div class="wrap"><div class="card">连接中…</div></div>`;
+    const me = mePlayer();
+    const reveal = pub.phase === 'reveal';
+    const over = pub.phase === 'over' || pub.winner;
+    const roundNo = reveal ? (pub.lastResult ? pub.lastResult.round : pub.round) : pub.round;
+    const phaseText = reveal ? '结算展示' : (canAct() ? '选择出招' : '等待中');
+
+    if (over) return screenOver();
+
+    return `
+    <div class="topbar"><div class="inner">
+      <div class="grow">
+        <div class="row wrap">
+          <b>第 ${roundNo} 回合</b>
+          <span class="badge ${reveal ? 'amber' : 'blue'}">${phaseText}</span>
+          <span class="badge grey">房间 ${esc(app.roomCode)}</span>
+          <button class="btn sm ghost" style="margin-left:auto" data-act="rules">规则</button>
+        </div>
+        <div class="bar" style="margin-top:6px"><i id="timerBar" style="width:100%"></i></div>
+      </div>
+      <div class="timer"><div class="num" id="timerNum">0.0</div></div>
+    </div></div>
+
+    <div class="wrap">
+      <div class="players">${pub.players.map(p => playerCard(p, reveal)).join('')}</div>
+
+      ${canAct() ? `
+      <div class="card" style="margin-top:12px">
+        <div class="myinfo">
+          <div class="kv"><span class="muted small">我的血量</span><b>${fmtHp(me.hp)}</b></div>
+          <div class="kv"><span class="muted small">点数</span><b>${fmtNum(me.points)}</b>
+            ${count('ji') ? `<span class="badge green">集 +${count('ji')}</span>` : ''}</div>
+          <div class="kv"><span class="muted small">本回合可用</span><b>${fmtNum(myUsable() - myCost())}</b></div>
+        </div>
+        <div class="bag" style="margin-top:8px">
+          ${B.GIFT_IDS.filter(g => (me.bag[g] || 0) > 0).map(g =>
+            `<span class="chip">${esc(B.ITEMS[g].name)} ×${me.bag[g]}</span>`).join('') ||
+            '<span class="tiny muted">背包空着（上吊送精血、四刀送剑气、五刀送天雷、不死送肥美）</span>'}
+        </div>
+        <div class="divider"></div>
+        ${itemPanel()}
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="row space">
+          <b>本回合出招</b>
+          <button class="btn sm ghost" data-act="clear">清空</button>
+        </div>
+        <div class="small" style="margin-top:6px">${esc(describeDraft())}</div>
+        <div class="small" style="margin-top:4px">
+          已花 <b>${fmtNum(myCost())}</b> 点 / 可用 <b>${fmtNum(myUsable())}</b> 点
+          ${myCost() > myUsable() ? '<span class="badge red">点数不够</span>' : ''}
+        </div>
+        ${app.err ? `<div class="err">${esc(app.err)}</div>` : ''}
+      </div>
+      <div class="spacer-bottom"></div>
+      </div>
+
+      <div class="actionbar"><div class="inner">
+        <div class="grow info">
+          ${me.submitted ? '<span class="badge green">已锁定 ✓ 时间到前还能改</span>'
+            : `<span>已锁定 <b>${pub.players.filter(p => p.alive && p.submitted).length}</b> / ${pub.players.filter(p => p.alive).length} 人</span>`}
+        </div>
+        <button class="btn ghost" data-act="log">日志</button>
+        <button class="btn primary lg" data-act="submit">${me.submitted ? '更新出招' : '锁定出招'}</button>
+      </div></div>`
+      : `
+      <div class="card" style="margin-top:12px">
+        <b>${reveal ? '本回合结算' : '等待其他玩家…'}</b>
+        <div class="small muted" style="margin-top:6px">
+          ${reveal ? '看看谁对谁做了什么，' + secText(app.remainMs) + ' 秒后进入下一回合。' : '倒计时结束后统一结算。'}
+        </div>
+        ${reveal ? `<div class="divider"></div>${revealList()}` : ''}
+      </div>
+      ${me && !me.alive ? '<div class="card" style="text-align:center">你已出局，正在观战</div>' : ''}
+      <div class="row" style="margin-top:12px;justify-content:center">
+        <button class="btn ghost" data-act="rules">看规则</button>
+        <button class="btn ghost" data-act="log">看战斗日志</button>
+      </div>
+      <div class="spacer-bottom"></div>
+      </div>
+      <div class="actionbar"><div class="inner">
+        <div class="grow info">${reveal ? '结算展示中…' : '本回合已结束'}</div>
+      </div></div>`}
+    `;
+  }
+
+  function playerCard(p, reveal) {
+    const flags = [];
+    if (p.isHost) flags.push('<span class="badge amber">房主</span>');
+    if (p.isBot) flags.push('<span class="badge grey">电脑</span>');
+    if (p.id === app.me) flags.push('<span class="badge blue">你</span>');
+    if (!p.connected) flags.push('<span class="badge grey">掉线</span>');
+    if (!p.alive) flags.push('<span class="badge red">出局</span>');
+    else if (p.inDuel && p.duel) flags.push(`<span class="badge red">决斗中 ${p.duel.cleared.length}/${p.duel.targets.length} · 剩 ${p.duel.left}</span>`);
+    else if (p.selfGuardUntil >= (app.pub.round || 0)) flags.push(`<span class="badge purple">自守保护至 R${p.selfGuardUntil}</span>`);
+    if (!reveal && p.alive && p.submitted) flags.push('<span class="badge green">已锁定</span>');
+
+    let act = '';
+    if (reveal && p.picks) {
+      const rep = app.pub.lastResult ? app.pub.lastResult.reports.find(r => r.id === p.id) : null;
+      const myAct = B.describePicks(app.pub, p.picks);
+      act = `<div class="act">
+        <div>${esc(myAct)}</div>
+        ${rep ? rep.events.map(e =>
+          `<span class="ev ${/阵亡|暴毙|☠️/.test(e) ? 'hit' : (/获得|防御|挡下|反盾成功/.test(e) ? 'good' : '')}">· ${esc(e)}</span>`).join('') : ''}
+      </div>`;
+    }
+    return `<div class="pcard ${p.id === app.me ? 'me' : ''} ${!p.alive ? 'dead' : ''} ${reveal && !p.alive ? 'reveal-dead' : ''}">
+      <div class="pname">
+        <span class="avatar" style="background:${avatarOf(p)}">${initial(p.name)}</span>
+        <span class="ellipsis">${esc(p.name)}</span>
+      </div>
+      <div class="stats">
+        <span>❤ <b>${p.alive ? fmtHp(p.hp) : '—'}</b></span>
+        <span>🪙 <b>${fmtNum(p.points)}</b></span>
+      </div>
+      <div class="flags">${flags.join('')}</div>
+      ${act}
+    </div>`;
+  }
+
+  function revealList() {
+    const res = app.pub.lastResult;
+    if (!res) return '';
+    return `<ul class="logbox" style="max-height:none">${res.reports.map(r => {
+      const p = app.pub.players.find(x => x.id === r.id);
+      const items = B.describePicks(app.pub, { items: r.items, alloc: r.alloc, steal: r.steal });
+      const died = r.events.some(e => /阵亡|暴毙/.test(e));
+      return `<li class="res ${died ? 'died' : ''}">
+        <div><b>${esc(p ? p.name : r.name)}</b> ${esc(items)}</div>
+        ${r.events.map(e => `<div class="tiny ${/阵亡|暴毙/.test(e) ? 'err' : 'muted'}">${esc(e)}</div>`).join('')}
+      </li>`;
+    }).join('')}</ul>`;
+  }
+
+  function screenOver() {
+    const pub = app.pub;
+    const w = pub.players.find(p => p.id === pub.winner);
+    return `
+    <div class="wrap">
+      <div class="card" style="text-align:center;padding:32px 16px">
+        <div style="font-size:44px">${w ? '🏆' : '🤝'}</div>
+        <h2 style="font-size:24px;font-weight:800;margin-top:8px">${w ? esc(w.name) + ' 拔得头筹！' : '全员阵亡，平局'}</h2>
+        <div class="small muted" style="margin-top:8px">共 ${(pub.lastResult ? pub.lastResult.round : pub.round)} 回合</div>
+        <div style="margin-top:24px">
+          ${app.isHost ? '<button class="btn primary lg block" data-act="rematch">再来一局</button>' : ''}
+          <button class="btn ghost block" style="margin-top:8px" data-act="rules">看规则</button>
+          <button class="btn ghost block" style="margin-top:8px" data-act="leave">离开房间</button>
+        </div>
+      </div>
+      <div class="card">
+        <b>战报</b>
+        <div class="divider"></div>
+        ${revealList()}
+      </div>
+      <div style="height:24px"></div>
+    </div>`;
+  }
+
+  /* ------------------------------------------------------------ 道具面板 */
+  const TABS = [
+    { id: 'attack', name: '攻击' },
+    { id: 'defense', name: '防御' },
+    { id: 'reverse', name: '反盾' },
+    { id: 'special', name: '特殊' },
+    { id: 'gift', name: '赠品' }
+  ];
+  const TAB_OF = {
+    yidao: 'attack', shuangdao: 'attack', shangdiao: 'attack', sidao: 'attack', wudao: 'attack',
+    caihong: 'attack', cibao: 'attack', podun: 'attack',
+    busi: 'defense', xiaofang: 'defense', dafang: 'defense', cidun: 'defense', heidong: 'defense',
+    baidong: 'defense', hezhang: 'defense',
+    xiaofan: 'reverse', dafan: 'reverse', chaofan: 'reverse',
+    tou: 'special', zishou: 'special', du: 'special',
+    jingxue: 'gift', jianqi: 'gift', tianlei: 'gift', feimei: 'gift', diefei: 'gift'
+  };
+
+  function itemLocked(it) {
+    const me = mePlayer();
+    if (!me) return true;
+    if (it.pack && !packOn(it.id)) return true;
+    if (it.giftOnly && !(me.bag[it.id] > 0)) return true;
+    if (it.consume && !Object.keys(it.consume).every(k => (me.bag[k] || 0) >= it.consume[k])) return true;
+    if (it.id === 'zishou' && (me.inDuel || B.isDuelTarget(app.pub, me.id))) return true;
+    if ((it.kind === 'attack' || it.kind === 'smite') && foes().length === 0) return true;
+    return false;
+  }
+
+  function itemPanel() {
+    const me = mePlayer();
+    const items = B.ITEM_LIST.filter(it => TAB_OF[it.id] === tab && (!it.pack || packs()[it.pack]));
+    return `
+      <div class="row" style="gap:8px">
+        <button class="btn sm ${count('ji') ? 'primary' : 'ghost'}" data-act="inc" data-item="ji">🪙 集 +1 点${count('ji') ? ` (${count('ji')})` : ''}</button>
+        <span class="tiny muted">点数只靠「集」赚，结算时立刻到手</span>
+      </div>
+      <div class="tabs" style="margin-top:12px">
+        ${TABS.map(t => {
+          const n = Object.keys(draft.items).filter(id => TAB_OF[id] === t.id && draft.items[id] > 0).length;
+          return `<button class="tab ${tab === t.id ? 'on' : ''}" data-act="tab" data-tab="${t.id}">${t.name}${n ? `<span class="dot">${n}</span>` : ''}</button>`;
+        }).join('')}
+      </div>
+      <div class="items">
+        ${items.map(it => itemCard(it, me)).join('')}
+      </div>`;
+  }
+
+  function itemCard(it, me) {
+    const n = count(it.id);
+    const locked = itemLocked(it);
+    const cost = B.unitCost(app.pub, me, it.id);
+    const costText = cost === 0 ? '免费' : (it.costFn ? `动态 ${fmtNum(cost)} 点` : `${fmtNum(cost)} 点`);
+    const maxText = it.giftOnly ? `你有 ${me.bag[it.id] || 0} 个` : '';
+    return `<div class="item ${n ? 'on' : ''} ${locked ? 'locked' : ''}">
+      <div class="head">
+        <span class="icon">${it.icon}</span>
+        <span class="nm">${esc(it.name)}</span>
+        <span class="cost ${cost === 0 ? 'free' : ''}">${costText}</span>
+      </div>
+      <div class="desc">${esc(it.desc)}${maxText ? `（${maxText}）` : ''}</div>
+      <div class="ctrl">
+        <div class="stepper">
+          <button data-act="dec" data-item="${it.id}" ${locked || n <= 0 ? 'disabled' : ''}>−</button>
+          <span class="n">${n}</span>
+          <button data-act="inc" data-item="${it.id}" ${locked ? 'disabled' : ''}>＋</button>
+        </div>
+      </div>
+      ${targetRowHtml(it, n)}
+    </div>`;
+  }
+
+  /** 目标行：点头像多选（攻击类按“同种类同数量”均分给选中的人） */
+  function targetRowHtml(it, n) {
+    const isAim = it.kind === 'attack' || it.kind === 'smite';
+    const isSteal = it.kind === 'steal';
+    if (!isAim && !isSteal) return '';
+    const list = foes();
+    const sel = isSteal ? draft.steal : (draft.sel[it.id] || []);
+    const alloc = draft.alloc[it.id] || {};
+    const hint = isSteal ? '偷谁？可多选'
+      : (!n ? '先加数量'
+        : `打谁？${n} 个${sel.length > 1 ? ` 均分给 ${sel.length} 人` : ''}`);
+    if (!n && !isSteal) return `<div class="targets"><div class="tiny muted">先加数量</div></div>`;
+    return `<div class="targets">
+      <div class="tiny muted">${hint}</div>
+      <div class="tchips">
+        ${list.map(p => `<button class="tchip ${sel.indexOf(p.id) >= 0 ? 'on' : ''}" data-act="pick"
+            data-item="${esc(it.id)}" data-target="${esc(p.id)}" title="${esc(p.name)}"
+          >${initial(p.name)}${alloc[p.id] > 1 ? `<i>${alloc[p.id]}</i>` : ''}</button>`).join('')}
+        ${isAim && list.length > 1 ? `<button class="btn sm ghost" data-act="pick-all" data-item="${esc(it.id)}">全选</button>` : ''}
+        ${isSteal && list.length > 1 ? `<button class="btn sm ghost" data-act="steal-all">全选</button>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function describeDraft() {
+    const parts = [];
+    const me = mePlayer();
+    Object.keys(draft.items).forEach(id => {
+      const it = B.ITEMS[id], n = draft.items[id];
+      if (it.kind === 'attack' || it.kind === 'smite') {
+        const map = draft.alloc[id] || {};
+        const list = Object.keys(map).filter(k => map[k] > 0)
+          .map(k => { const p = app.pub.players.find(x => x.id === k); return `${p ? p.name : '?'}×${map[k]}`; });
+        parts.push(`${it.name}×${n}${list.length ? ' → ' + list.join(' ') : ''}`);
+      } else if (it.kind === 'steal') {
+        parts.push(`${it.name}×${n} → ${draft.steal.map(k => { const p = app.pub.players.find(x => x.id === k); return p ? p.name : '?'; }).join(' ')}`);
+      } else {
+        parts.push(`${it.name}×${n}`);
+      }
+    });
+    if (!parts.length) return '还没选任何道具。点上面的「集」赚钱，或者直接买刀。';
+    return parts.join('，');
+  }
+
+  /* ---------------------------------------------------------------- 弹层 */
+  function renderSheet() {
+    const el = $('#overlay');
+    if (!sheet) { el.innerHTML = ''; return; }
+    let body = '', title = '';
+    if (sheet === 'rules') { title = '完整规则'; body = rulesHtml(); }
+    else if (sheet === 'log') { title = '战斗日志'; body = logHtml(); }
+    el.innerHTML = `<div class="mask" data-act="maskclose">
+      <div class="sheet" data-stop="1">
+        <div class="row space"><h3>${esc(title)}</h3>
+          <button class="btn sm ghost" data-act="close">关闭</button></div>
+        <div class="divider"></div>
+        ${body}
+      </div>
+    </div>`;
+  }
+
+  function logHtml() {
+    const log = (app.pub && app.pub.log) || [];
+    if (!log.length) return '<div class="small muted">还没有战况。</div>';
+    return `<ul class="logbox">${log.slice().reverse().map(l => `<li>${esc(l)}</li>`).join('')}</ul>`;
+  }
+
+  function rulesHtml() {
+    return `<div class="doc">
+      <h4>核心</h4>
+      <p>每回合所有人同时出招，倒计时结束后统一结算：<b>受到的伤害 = 外面所有人打你的总攻击 − 你的防御</b>。</p>
+      <p>血量初始为 <b>0</b>，下限为 0。<b>只要 血量 − 伤害 &lt; 0 就死</b> —— 也就是说 0 血的人挨 1 点伤害就死，<code>合掌</code> 加的血就是多一层缓冲。</p>
+      <p>攻击、防御、反盾都在回合末结算、下回合清零；血量、点数、赠品会留到下回合。</p>
+
+      <h4>点数</h4>
+      <p>初始 0 点，不会自动增长，只能靠「集」赚。集在本回合结算时立刻入账，<b>同一个回合就能花掉</b>。</p>
+
+      <h4>攻击</h4>
+      <p>一刀 1 / 双刀 2 / 上吊 3 / 四刀 4 / 五刀 5 / 彩虹斩 8。同一种刀买了几个，就能同时瞄准几个人：买完之后<b>直接点对手头像多选</b>即可，买 n 个选 m 个人就均分给这 m 人（除不尽的余数优先给先选的人），旁边还有「全选」一键点满。</p>
+      <p><b>彩虹斩</b>：命中即死，无视血量和自守；但会被防具挡下（伤害算成 ≤ 0 就无效）。基础规则每回合限 1 个，房主开了「彩虹斩叠加」才能 n 倍。</p>
+      <p><b>赠品</b>（回合末发放，自动进背包、可跨回合累积，要自己勾选用）：上吊送 1 精血（0.5 伤害，可叠加，对应每个上吊）、四刀送 1 剑气（1 伤害）、五刀送 1 天雷（3 伤害，<b>在小防面前只有 2 伤害</b>）、不死送 1 肥美（0.5 伤害）。叠肥＝吃掉 3 个肥美造成 2-ε 伤害（所以 2 血的人能剩一丝血站住，也破不了小反的 2 点弹性）。</p>
+      <p><b>磁暴</b>（2 点）：目标本回合若出磁盾，立刻暴毙；没出就无事发生。</p>
+
+      <h4>防御</h4>
+      <p>不死 1（免费）/ 小防 2（免费）/ 大防 3（1 点）/ 磁盾 5（2 点，会被磁暴劈）/ 黑洞 8（4 点）/ 白洞 ∞（6 点）。</p>
+
+      <h4>反盾</h4>
+      <p>像一个弹簧：外面打你的总攻击 <b>≤ 弹性范围</b> → 反盾成功，<b>无视血量杀死所有攻击你的人</b>（他们的防御也救不了）；<b>&gt; 弹性范围</b> → 反盾被破，反盾者无视血量当场暴毙，攻击方活着。小反 2（1 点）/ 大反 4（2 点）/ 超反 6.5（3 点）。多个反盾不叠加，取最大值。</p>
+
+      <h4>偷（0 点）</h4>
+      <p>用「偷」的回合防御固定为 0.5（买防具也顶不上用）。指定若干对象：</p>
+      <p>· 对象在「集」→ 偷走他<b>全部点数</b>（含刚集的）<br>
+         · 对象出防 / 反盾 / 自守 / 合掌 → <b>你当场暴毙</b><br>
+         · 对象在做别的事 → 无事发生</p>
+
+      <h4>拓展包（房主开）</h4>
+      <p><b>血量拓展</b>：合掌 —— 血量 +1、本回合防御 1；血量大于 1 时花 3 点，否则 2 点。破盾 —— 伤害 0.5（1 点），如果含破盾的攻击打得对方扣血，就清空对方血量。<br>
+         <b>自守拓展</b>：自守（1 点）—— 本回合防御 1，之后五回合内若死亡，改为和所有直接致死者发起决斗，回合上限 <b>4n+1</b>（n = 致死者人数）：决斗期内把这些人<b>都杀过一遍</b>（把对方自守打出来也算一遍）就复活，否则真正死亡。决斗期间双方都不能开自守。<br>
+         · 毒（2 点）：伤害 1.5，如果含毒的伤害打在自守状态或正在自守的玩家上，该玩家立刻暴毙。</p>
+
+      <h4>胜负</h4>
+      <p>没有回合上限，活到最后的人赢；如果全员同时阵亡就是平局。</p>
+
+      <h4>本实现补充说明</h4>
+      <p>· 「破盾」原规则没写点数消耗，本局按 <b>1 点</b> 实现；「偷」按 <b>0 点</b> 实现。<br>
+         · 死亡后点数与赠品清空，人变观战者。<br>
+         · 所有攻击同时结算：被反盾弹死的人，他本回合打出去的伤害依然生效。<br>
+         · 伤害公式只减「防御」，反盾单独判定（原话「减你的防御或攻击」里的"或攻击"没找到对应机制）。</p>
+    </div>`;
+  }
+
+  /* =========================================================== 事件处理 */
+  function bind() {
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('[data-act]');
+      if (!btn) return;
+      const act = btn.getAttribute('data-act');
+      const item = btn.getAttribute('data-item');
+      const target = btn.getAttribute('data-target');
+      if (act === 'maskclose' && e.target.closest('.sheet')) return;
+
+      switch (act) {
+        case 'create': ROOM.create(nick()); break;
+        case 'join': {
+          const code = ($('#codeInput') && $('#codeInput').value || '').trim().toUpperCase();
+          if (code.length < 4) { toast('房间号是 4 位'); return; }
+          ROOM.join(code, nick());
+          break;
+        }
+        case 'copy': copyText(app.roomCode); break;
+        case 'rules': sheet = 'rules'; renderSheet(); break;
+        case 'log': sheet = 'log'; renderSheet(); break;
+        case 'close': case 'maskclose': sheet = null; renderSheet(); break;
+        case 'leave': ROOM.leave(); break;
+        case 'addbot': ROOM.addBot(); break;
+        case 'kick': ROOM.kick(btn.getAttribute('data-id')); break;
+        case 'start': ROOM.start(); break;
+        case 'rematch': ROOM.rematch(); break;
+        case 'tab': tab = btn.getAttribute('data-tab'); render(); break;
+        case 'clear': draft = { items: {}, alloc: {}, sel: {}, steal: [] }; app.err = ''; ROOM.submit(draft); render(); break;
+        case 'submit': doSubmit(); break;
+
+        case 'inc': nudge(item, +1); break;
+        case 'dec': nudge(item, -1); break;
+        case 'pick': {
+          if (item === 'tou') {                    // 偷：不限人数，点谁算谁
+            const i = draft.steal.indexOf(target);
+            if (i >= 0) draft.steal.splice(i, 1); else draft.steal.push(target);
+            render();
+          } else toggleTarget(item, target);
+          break;
+        }
+        case 'pick-all': pickAll(item); break;
+        case 'steal-all': draft.steal = foes().map(p => p.id); render(); break;
+        default: break;
+      }
+    });
+
+    document.addEventListener('change', e => {
+      const el = e.target.closest('[data-set]');
+      if (!el) return;
+      const key = el.getAttribute('data-set');
+      const val = el.type === 'checkbox' ? el.checked : Number(el.value);
+      ROOM.setSetting(key, val);
+    });
+    document.addEventListener('input', e => {
+      if (e.target.id === 'nickInput') { try { localStorage.setItem('badao_nick', e.target.value); } catch (err) { /* 隐私模式下忽略 */ } }
+      if (e.target.id === 'codeInput') e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+
+    setInterval(() => {
+      const dt = 100;
+      if (app.remainMs > 0) { app.remainMs -= dt; renderTimer(); }
+    }, 100);
+  }
+
+  function nudge(id, d) {
+    if (!canAct()) return;
+    const cur = count(id);
+    if (d > 0) {
+      // 点数够不够先看一眼，避免点半天最后提交失败
+      const extra = B.unitCost(app.pub, mePlayer(), id);
+      if (myCost() + extra > myUsable()) {
+        app.err = `点数不够了：这件还要 ${fmtNum(extra)} 点，你只剩 ${fmtNum(myUsable() - myCost())} 点`;
+        render();
+        return;
+      }
+    }
+    setCount(id, cur + d);
+    app.err = '';
+    render();
+  }
+
+
+  function doSubmit() {
+    if (!canAct()) { toast('现在不是出招阶段'); return; }
+    const action = { items: draft.items, alloc: draft.alloc, steal: draft.steal };
+    const v = B.validate(app.pub, app.me, action);
+    if (!v.ok) {
+      app.err = v.errors.join('；');
+      toast(v.errors[0]);
+      render();
+      return;
+    }
+    app.err = '';
+    ROOM.submit(B.normalize(app.pub, app.me, action));
+    toast('已锁定，时间到之前还能改');
+    render();
+  }
+
+  /* ---------------------------------------------------------------- 杂项 */
+  let toastTimer = null;
+  function toast(msg) {
+    const old = $('.toast');
+    if (old) old.remove();
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.remove(), 2200);
+  }
+
+  function copyText(t) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(() => toast('房间号已复制：' + t), () => toast('复制失败，手动记一下：' + t));
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = t; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); toast('房间号已复制：' + t); } catch (e) { toast('复制失败，手动记一下：' + t); }
+      ta.remove();
+    }
+  }
+
+  function nick() {
+    const inp = $('#nickInput');
+    if (inp && inp.value.trim()) return inp.value.trim();
+    let saved = '';
+    try { saved = localStorage.getItem('badao_nick') || ''; } catch (e) { /* 忽略 */ }
+    if (saved) return saved;
+    return '玩家' + Math.floor(Math.random() * 900 + 100);
+  }
+
+  /** 无实质变化时只刷新倒计时（避免每 500ms 重排整个界面） */
+  function update(pub, remainMs, remainTotal) {
+    app.pub = pub;
+    if (remainMs != null) app.remainMs = remainMs;
+    if (remainTotal != null) app.remainTotal = remainTotal;
+    softRender();
+  }
+
+  return {
+    app: app, bind: bind, render: render, update: update, toast: toast,
+    resetDraft: () => { draft = { items: {}, alloc: {}, sel: {}, steal: [] }; },
+    rulesHtml: rulesHtml
+  };
+})();
+</script>
+<script>/* ============================================================================
+ * 拔刀 · 联机层
+ * 主机（房主）权威：房主持有完整局面，客户端只发"我出什么招"，主机广播公开状态。
+ * 房间码 = PeerJS 的 ID（badao3-XXXX），所以不需要任何后台服务器。
+ * 如果拿不到联机库 / 没有网络，会自动降级成"只能和电脑玩"的单机房间。
+ * ==========================================================================*/
+const ROOM = (function () {
+  'use strict';
+  const B = BADAO;
+  const APP = VIEW.app;
+
+  const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 去掉 I O 0 1，念起来不歧义
+  const PEER_PREFIX = 'badao3-';
+  const TICK_MS = 200;
+  const BROADCAST_MS = 500;
+
+  const myId = 'u' + Math.random().toString(36).slice(2, 10);
+  let peer = null;
+  let isHost = false;
+  let code = '';
+  let state = null;              // 仅主机有
+  let conns = [];                // [{conn, id}] 仅主机有
+  let deadline = 0;
+  let remainTotal = 0;
+  let ticker = null;
+  let lastBroadcast = 0;
+  let joinRetry = 0;
+  let myConn = null;             // 仅客户端有
+
+  /* --------------------------------------------------------------- 工具 */
+  function randCode() {
+    let s = '';
+    for (let i = 0; i < 4; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+    return s;
+  }
+  const libOK = () => typeof window.Peer === 'function';
+
+  function status(t) { APP.status = t; VIEW.render(); }
+  function toast(t) { VIEW.toast(t); }
+
+  function remainMs() { return Math.max(0, deadline - Date.now()); }
+
+  /* --------------------------------------------------------- 主机：广播 */
+  function broadcast(force) {
+    if (!isHost) return;
+    const now = Date.now();
+    if (!force && now - lastBroadcast < BROADCAST_MS) return;
+    lastBroadcast = now;
+    const msg = {
+      t: 'state',
+      pub: B.publicState(state),
+      remainMs: remainMs(),
+      remainTotal: remainTotal,
+      code: code
+    };
+    conns.forEach(c => { try { c.conn.open && c.conn.send(msg); } catch (e) { /* 单个连接坏了不影响别人 */ } });
+    APP.roomCode = code;
+    VIEW.update(msg.pub, msg.remainMs, msg.remainTotal);
+  }
+
+  /* ------------------------------------------------------- 主机：回合流转 */
+  function setPhase(phase, sec) {
+    state.phase = phase;
+    remainTotal = Math.max(0, (sec || 0) * 1000);
+    deadline = Date.now() + remainTotal;
+    if (phase === 'select') prepareBots();
+    broadcast(true);
+  }
+
+  function prepareBots() {
+    state.players.forEach(p => {
+      if (!p.isBot || !p.alive) return;
+      p.picks = B.botAction(state, p.id);
+      p.submitted = true;
+    });
+  }
+
+  function allSubmitted() {
+    const need = state.players.filter(p => p.alive && !p.isBot && p.connected);
+    if (!need.length) return false;
+    return need.every(p => p.submitted);
+  }
+
+  function settleRound() {
+    state.players.forEach(p => {
+      if (!p.isBot && p.alive && !p.submitted) { p.picks = B.emptyPicks(); p.submitted = true; }   // 没交的人算空手
+    });
+    B.settle(state);
+    if (state.phase === 'over') { deadline = 0; remainTotal = 0; broadcast(true); return; }
+    setPhase('reveal', state.settings.revealSec);
+  }
+
+  function nextRound() {
+    if (state.phase === 'over') { broadcast(true); return; }
+    if (state.players.filter(p => p.alive).length <= 1) { state.phase = 'over'; broadcast(true); return; }
+    setPhase('select', state.settings.selectSec);
+  }
+
+  function tick() {
+    if (!isHost) return;
+    const left = remainMs();
+    if (state.phase === 'select') {
+      if (left <= 0) settleRound();
+      else if (state.settings.autoAdvance && allSubmitted() && left < remainTotal - 800) settleRound();
+      else broadcast(false);
+    } else if (state.phase === 'reveal') {
+      if (left <= 0) nextRound();
+      else broadcast(false);
+    }
+  }
+
+  function ensureTicker() {
+    if (ticker) return;
+    ticker = setInterval(tick, TICK_MS);
+  }
+
+  /* ------------------------------------------------------ 主机：处理消息 */
+  function onHostData(data, conn) {
+    if (!data || !data.t) return;
+    if (data.t === 'join') {
+      const id = String(data.id || '').slice(0, 24) || 'u' + Math.random().toString(36).slice(2, 8);
+      const link = conns.find(c => c.conn === conn);
+      if (link) link.id = id;
+      const exist = B.getPlayer(state, id);
+      if (exist) {
+        exist.connected = true;
+        exist.name = exist.name || data.name;
+      } else {
+        if (state.players.length >= 12) { try { conn.send({ t: 'err', msg: '房间满了（最多 12 人）' }); } catch (e) { /* 忽略 */ } return; }
+        const p = B.addPlayer(state, id, String(data.name || '玩家').slice(0, 8) || '玩家');
+        p.connected = true;
+        state.log.push(`${p.name} 加入了房间`);
+      }
+      try { conn.send({ t: 'welcome', code: code, id: id, you: id }); } catch (e) { /* 忽略 */ }
+      broadcast(true);
+      toast(B.getPlayer(state, id).name + ' 加入了');
+      return;
+    }
+    const link = conns.find(c => c.conn === conn);
+    const id = link ? link.id : null;
+    if (!id) return;
+    if (data.t === 'action') {
+      const v = B.validate(state, id, data.action);
+      if (!v.ok) { try { conn.send({ t: 'err', msg: v.errors.join('；') }); } catch (e) { /* 忽略 */ } return; }
+      const p = B.getPlayer(state, id);
+      p.picks = B.normalize(state, id, data.action);
+      p.submitted = true;
+      broadcast(true);
+    }
+  }
+
+  /* --------------------------------------------------------------- 建房 */
+  function create(name) {
+    APP.busy = true;
+    name = String(name || '房主').slice(0, 8);
+    code = randCode();
+    isHost = true;
+    state = B.newState();
+    state.hostId = myId;
+    B.addPlayer(state, myId, name, { isHost: true });
+    APP.me = myId;
+    APP.isHost = true;
+    APP.roomCode = code;
+    APP.mode = 'room';
+    APP.status = libOK() ? '正在开房…' : '联机服务没加载出来：这一局只能加电脑玩家一起玩（刷新页面可以再试）';
+    VIEW.render();
+    ensureTicker();     // 一定要先转起来：房主可能在联机服务连上之前就开局
+
+    if (!libOK()) {                  // 降级：单机房间
+      broadcast(true);
+      return;
+    }
+    openHostPeer(0);
+  }
+
+  function openHostPeer(retry) {
+    try { if (peer) peer.destroy(); } catch (e) { /* 忽略 */ }
+    peer = new window.Peer(PEER_PREFIX + code, { debug: 1 });
+    peer.on('open', () => {
+      APP.status = '';
+      broadcast(true);
+      VIEW.render();
+    });
+    peer.on('connection', conn => {
+      conns.push({ conn: conn, id: null });
+      conn.on('data', d => onHostData(d, conn));
+      conn.on('open', () => { broadcast(true); });
+      conn.on('close', () => {
+        const link = conns.find(c => c.conn === conn);
+        if (link && link.id) {
+          const p = B.getPlayer(state, link.id);
+          if (p) { p.connected = false; p.submitted = true; state.log.push(`${p.name} 掉线了`); }
+          broadcast(true);
+        }
+        conns = conns.filter(c => c.conn !== conn);
+        VIEW.render();
+      });
+      conn.on('error', () => { /* 单个连接出错不影响房间 */ });
+    });
+    peer.on('error', err => {
+      const type = err && err.type;
+      if (type === 'unavailable-id' && retry < 3) {     // 房间号撞车，换一个
+        code = randCode();
+        APP.roomCode = code;
+        openHostPeer(retry + 1);
+        return;
+      }
+      APP.status = type === 'network' || type === 'server-error' || type === 'socket-error'
+        ? '连不上联机服务（可能网络被限制）。你仍然可以加电脑玩家开局，或刷新重试。'
+        : '联机出错：' + (err && err.message ? err.message : type || '未知');
+      VIEW.render();
+    });
+    peer.on('disconnected', () => {
+      try { peer.reconnect(); } catch (e) { /* 忽略 */ }
+    });
+  }
+
+  /* --------------------------------------------------------------- 加入 */
+  function join(roomCode, name) {
+    if (!libOK()) { status('联机服务没加载出来，没法加入别人的房间。刷新页面再试，或自己开房和电脑玩。'); return; }
+    code = String(roomCode || '').toUpperCase().trim();
+    isHost = false;
+    APP.me = myId;
+    APP.isHost = false;
+    APP.roomCode = code;
+    APP.mode = 'room';
+    APP.status = '正在连接房间 ' + code + '…';
+    VIEW.render();
+    openClientPeer(name, 0);
+  }
+
+  function openClientPeer(name, retry) {
+    try { if (peer) peer.destroy(); } catch (e) { /* 忽略 */ }
+    peer = new window.Peer(null, { debug: 1 });
+    peer.on('open', () => {
+      const conn = peer.connect(PEER_PREFIX + code, { reliable: true });
+      myConn = conn;
+      const timer = setTimeout(() => {
+        if (!conn.open) { failJoin('连接超时：房间号对不对？房主还在房间里吗？'); }
+      }, 12000);
+      conn.on('open', () => {
+        clearTimeout(timer);
+        joinRetry = 0;
+        APP.status = '';
+        conn.send({ t: 'join', name: String(name || '玩家').slice(0, 8), id: myId });
+        VIEW.render();
+      });
+      conn.on('data', d => {
+        if (!d || !d.t) return;
+        if (d.t === 'state') {
+          APP.roomCode = d.code || code;
+          VIEW.update(d.pub, d.remainMs, d.remainTotal);
+        } else if (d.t === 'err') {
+          toast(d.msg);
+        }
+      });
+      conn.on('close', () => {
+        clearTimeout(timer);
+        if (joinRetry < 3) {
+          joinRetry++;
+          APP.status = '和房主断开了，正在重连…（' + joinRetry + '/3）';
+          VIEW.render();
+          setTimeout(() => openClientPeer(name, joinRetry), 1500);
+        } else {
+          failJoin('房主离开了房间');
+        }
+      });
+      conn.on('error', () => { clearTimeout(timer); failJoin('连接出错，房间可能已经关了'); });
+    });
+    peer.on('error', err => {
+      const type = err && err.type;
+      if (type === 'peer-unavailable') failJoin('没找到房间 ' + code + '（房间号写错？或者房主已经退出了）');
+      else failJoin('联机出错：' + (err && err.message ? err.message : type || '未知'));
+    });
+  }
+
+  function failJoin(msg) {
+    APP.status = msg;
+    APP.mode = 'home';
+    APP.pub = null;
+    VIEW.resetDraft();
+    VIEW.render();
+    if (peer) { try { peer.destroy(); } catch (e) { /* 忽略 */ } peer = null; }
+  }
+
+  /* --------------------------------------------------------- 主机操作 */
+  function start() {
+    if (!isHost || !state) return;
+    if (state.players.length < 2) { toast('至少要 2 个人（可以加电脑玩家）'); return; }
+    if (state.phase !== 'lobby') return;              // 防连点：已经在局内就别重开
+    ensureTicker();
+    state.round = 1;
+    state.winner = null;
+    state.players.forEach(p => { p.picks = B.emptyPicks(); p.submitted = false; });
+    APP.mode = 'game';
+    setPhase('select', state.settings.selectSec);
+  }
+
+  function addBot() {
+    if (!isHost || !state) return;
+    if (state.players.length >= 12) { toast('房间满了'); return; }
+    const n = state.players.filter(p => p.isBot).length + 1;
+    const names = ['刀客', '阿飞', '老六', '铁憨憨', '小刀', '摸鱼王', '夜行者', '大聪明'];
+    const p = B.addPlayer(state, 'bot' + Date.now() + n, names[(n - 1) % names.length] + (n > names.length ? n : ''), { isBot: true });
+    state.log.push(`${p.name}（电脑）加入了房间`);
+    broadcast(true);
+  }
+
+  function kick(id) {
+    if (!isHost || !state) return;
+    const p = B.getPlayer(state, id);
+    if (!p || p.isHost) return;
+    state.players = state.players.filter(x => x.id !== id);
+    const link = conns.find(c => c.id === id);
+    if (link) {
+      try { link.conn.send({ t: 'err', msg: '你被房主移出了房间' }); link.conn.close(); } catch (e) { /* 忽略 */ }
+      conns = conns.filter(c => c !== link);
+    }
+    state.log.push(`${p.name} 被移出房间`);
+    broadcast(true);
+  }
+
+  function setSetting(key, value) {
+    if (!isHost || !state) return;
+    if (key === 'pack.hp' || key === 'pack.rainbow' || key === 'pack.self') {
+      state.settings.packs[key.split('.')[1]] = !!value;
+    } else if (key === 'selectSec') {
+      state.settings.selectSec = Math.min(600, Math.max(10, Number(value) || 60));
+    } else if (key === 'revealSec') {
+      state.settings.revealSec = Math.min(120, Math.max(3, Number(value) || 12));
+    } else if (key === 'autoAdvance') {
+      state.settings.autoAdvance = !!value;
+    }
+    broadcast(true);
+  }
+
+  function rematch() {
+    if (!isHost || !state) return;
+    state.players.forEach(p => {
+      p.alive = true; p.hp = 0; p.points = 0;
+      p.bag = { jingxue: 0, jianqi: 0, tianlei: 0, feimei: 0 };
+      p.picks = B.emptyPicks(); p.submitted = false;
+      p.selfGuardUntil = -1; p.selfGuardTriggered = false; p.inDuel = false; p.duel = null;
+    });
+    state.round = 1;
+    state.winner = null;
+    state.phase = 'lobby';
+    state.log = [];
+    state.lastResult = null;
+    APP.mode = 'room';
+    VIEW.resetDraft();
+    broadcast(true);
+  }
+
+  /* ------------------------------------------------------------ 出招提交 */
+  function submit(action) {
+    if (!state && !isHost && !myConn) return;
+    if (isHost) {
+      if (!state || state.phase !== 'select') return;
+      const p = B.getPlayer(state, myId);
+      if (!p || !p.alive) return;
+      p.picks = B.normalize(state, myId, action);
+      p.submitted = true;
+      broadcast(true);
+    } else {
+      if (myConn && myConn.open) myConn.send({ t: 'action', action: action });
+      else toast('还没连上房主，稍等再试');
+    }
+  }
+
+  function leave() {
+    try { if (myConn) myConn.close(); } catch (e) { /* 忽略 */ }
+    try { if (peer) peer.destroy(); } catch (e) { /* 忽略 */ }
+    peer = null; myConn = null; conns = [];
+    if (ticker) { clearInterval(ticker); ticker = null; }
+    isHost = false; state = null; code = '';
+    APP.mode = 'home'; APP.pub = null; APP.status = ''; APP.roomCode = '';
+    APP.isHost = false; APP.me = null; APP.remainMs = 0;
+    VIEW.resetDraft();
+    VIEW.render();
+  }
+
+  return {
+    create: create, join: join, start: start, addBot: addBot, kick: kick,
+    setSetting: setSetting, rematch: rematch, submit: submit, leave: leave,
+    isHost: () => isHost, code: () => code, myId: () => myId
+  };
+})();
+</script>
+<script>
+  // 联机库姗姗来迟时，把"连不上"的提示撤掉
+  window.__peerReady = function () {
+    if (VIEW.app.status && /联机服务/.test(VIEW.app.status)) {
+      VIEW.app.status = '';
+      VIEW.render();
+    }
+  };
+  VIEW.bind();
+  VIEW.render();
+</script>
+</body>
+</html>
