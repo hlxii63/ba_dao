@@ -1872,10 +1872,16 @@ const VIEW = (function () {
   /* ---------------------------------------------------------------- 房间 */
   function screenRoom() {
     const pub = app.pub;
-    if (!pub) return `<div class="wrap"><div class="card">正在连接房间…</div></div>`;
+    // 还没拿到房主的快照＝正在连：把"连到哪一步了"如实打在屏幕上，
+    // 不然玩家只看到"正在连接房间…"干等，就不知道到底是卡在信令还是卡在打洞。
+    if (!pub) return `<div class="wrap"><div class="card" style="text-align:center;padding:24px 16px">
+      <div style="font-size:28px">📡</div>
+      <div style="font-weight:700;margin-top:8px">房间 ${esc(app.roomCode || '……')}</div>
+      <div class="small muted" style="margin-top:8px">${esc(app.status || '正在连接…')}</div>
+      <button class="btn ghost block" style="margin-top:16px" data-act="leave">取消</button>
+    </div></div>`;
     const host = pub.players.find(p => p.isHost);
-    const s = pub.settings, pk = s.packs || {};
-    const needReady = pub.players.filter(p => p.connected && !p.ready);
+    const s = pub.settings, pk = s.packs || {};    const needReady = pub.players.filter(p => p.connected && !p.ready);
     const me = mePlayer();
     const canStart = pub.players.length >= 2 && needReady.length === 0;
     return `
@@ -1887,6 +1893,7 @@ const VIEW = (function () {
       <button class="btn sm danger" data-act="leave">退出</button>
     </div></div>
     <div class="wrap">
+      ${app.status ? `<div class="card" style="border-left:3px solid var(--amber)"><div class="small">⚠ ${esc(app.status)}</div></div>` : ''}
       <div class="card">
         <div class="row space">
           <div>
@@ -3140,6 +3147,22 @@ const VIEW = (function () {
          · <b>点数公开</b>：默认关（别人的点数与背包显示为 ?，防反推）；开了是明牌局。<br>
          · <b>血量拓展 / 彩虹斩叠加 / 自守拓展</b>：默认全关，按需开启。</p>
 
+      <h4>连不上房间怎么办</h4>
+      <p>联机其实分两段，任何一段不顺都会卡住，但原因完全不同：<br>
+         · <b>① 连联机服务器</b>（公共的 PeerJS 信令服务器，只负责告诉两边"对方在哪"）→ 失败提示「连不上联机服务器」<br>
+         · <b>② 和房主打洞直连</b>（WebRTC，真正的数据通道）→ 失败提示「打洞失败」</p>
+      <p>最常见的三种情况：<br>
+         · <b>同一个 WiFi 能连、换个网络就连不上</b>：双方各自在路由器后面时，需要 STUN 帮忙问出各自的公网地址；
+         本作已经把 ICE 换成国内能通的 STUN（小米 / B 站 / 芒果）并加了 TURN 中继兜底，
+         不再是"只问 Google、问不到就只能靠内网地址碰运气"。<br>
+         · <b>公司 / 校园网、手机流量连不上</b>：这类网络常封 UDP 或是对称 NAT，直连基本没戏，会退到 TURN 中继——
+         能连上、稍慢一点。<br>
+         · <b>刚才还能连、突然连不上</b>：公共信令服务器偶尔会掐掉空闲连接（房主页面现在会自动重连）；
+         房主切到别的标签页或息屏太久时，浏览器会冻住他的页面，客人就卡在「房主没回话」。</p>
+      <p><b>按这个顺序试</b>：① 两台设备连同一个普通 WiFi → ② 房主刷新页面重开房间 →
+         ③ 换手机热点 → ④ 实在不行让房主先加电脑玩家开局。<br>
+         另外要注意：走 TURN 中继时，你的操作数据会经第三方服务器转一圈（只在对不上直连时才会用到）。</p>
+
       <h4>本实现补充说明</h4>
       <p>· 「破盾」原规则没写点数消耗，本局按 <b>1 点</b> 实现；「偷」按 <b>0 点</b> 实现。<br>
          · 死亡后点数与赠品清空，人变观战者，<b>头像变黑白</b>。<br>
@@ -3450,6 +3473,56 @@ const ROOM = (function () {
   const TICK_MS = 200;
   const BROADCAST_MS = 500;
 
+  /* ------------------------------------------------------------ 联机配置 */
+  /**
+   * ICE 服务器：决定"两台设备能不能连上"。这件事值得单独讲清楚，因为它是"连不上"的头号原因。
+   *
+   * PeerJS 自带的默认配置**全是 stun.l.google.com** —— 国内基本连不通。STUN 的作用是
+   * "问一句：我在公网上的地址是什么"。问不到，双方就只知道自己的内网地址，
+   * 于是只有"两台设备在同一个 WiFi 里"能通（内网地址直接可达），一换网络就必然超时。
+   * 所以这里显式给一份：国内能通的 STUN 排前面，Google 留一个给海外用户兜底。
+   *
+   * 后面三个 TURN 是"中继"：公司/校园网封 UDP、或者双方都是对称 NAT 时，
+   * 打洞怎么都打不通，只能让数据绕第三方服务器转一圈。走中继会慢一点，
+   * 但"能连上"永远比"快"重要（这点流量对文字游戏完全够用）。
+   */
+  const ICE_SERVERS = [
+    { urls: 'stun:stun.miwifi.com:3478' },            // 小米（国内，实测有响应）
+    { urls: 'stun:stun.chat.bilibili.com:3478' },     // B 站（国内，实测有响应）
+    { urls: 'stun:stun.hitv.com:3478' },              // 芒果（国内，实测有响应）
+    { urls: 'stun:stun.nextcloud.com:443' },          // 走 443 端口，防"只放行网页端口"的网络
+    { urls: 'stun:stun.l.google.com:19302' },         // 海外兜底
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+  ];
+  const PEER_OPTS = () => ({ debug: 1, config: { iceServers: ICE_SERVERS } });
+
+  const SIGNAL_TIMEOUT_MS = 9000;    // 连信令服务器的上限
+  const PUNCH_TIMEOUT_MS = 14000;    // 打洞上限（真失败时 ICE 会提前报，不必干等这么久）
+  const WELCOME_TIMEOUT_MS = 7000;   // 连上了但房主不吭声的上限
+  const JOIN_MAX_ATTEMPT = 2;        // 打洞失败自动重试几次（含第一次）
+
+  /**
+   * 失败原因 → 说人话 + 能照着做的下一步。
+   * 这三件事原因完全不同，混成一句"连接超时"就是耍人：
+   *   signal      → 连不上信令服务器（网络挡了 / 服务器忙）
+   *   unavailable → 房间号不对 / 房主不在
+   *   punch       → 打洞失败（两边都在路由器后面，没能直连）
+   */
+  function joinFailText(kind) {
+    if (kind === 'signal') {
+      return '连不上联机服务器（公共的 PeerJS 信令服务器）：可能是你的网络挡了它，或者它正忙。等十秒再点一次「加入」通常就好了；一直不行就换个网络（手机热点）试试。';
+    }
+    if (kind === 'unavailable') {
+      return '没找到这个房间：房间号可能打错了，或者房主已经关掉页面/退出房间了。跟房主对一遍那 4 位房间号。';
+    }
+    if (kind === 'hostidle') {
+      return '已经连上房主了，但他一直没回话：他的浏览器可能把这个标签页冻住了（切到别的页面/息屏久了会这样）。让房主回到游戏页面点一下，或者重新开个房。';
+    }
+    return '打洞失败：你和房主各自在路由器后面，没能直接连上（不同 WiFi、公司/校园网、手机流量最容易这样）。把两台设备连到同一个普通 WiFi 再试；实在不行就让房主加电脑玩家先开局。';
+  }
+
   const myId = 'u' + Math.random().toString(36).slice(2, 10);
   let peer = null;
   let isHost = false;
@@ -3460,8 +3533,10 @@ const ROOM = (function () {
   let remainTotal = 0;
   let ticker = null;
   let lastBroadcast = 0;
-  let joinRetry = 0;
+  let reconnectCount = 0;       // 连上之后又断的次数（和"第一次连不上"分开数）
+  let joinToken = 0;             // 每发起一轮加入就 +1，用来作废上一轮还在跑的定时器
   let myConn = null;             // 仅客户端有
+  let hostKeepAlive = null;      // 房主：定时检查"我和信令服务器还连着吗"
 
   /* --------------------------------------------------------------- 工具 */
   function randCode() {
@@ -3622,8 +3697,17 @@ const ROOM = (function () {
 
   function openHostPeer(retry) {
     try { if (peer) peer.destroy(); } catch (e) { /* 忽略 */ }
-    peer = new window.Peer(PEER_PREFIX + code, { debug: 1 });
+    peer = new window.Peer(PEER_PREFIX + code, PEER_OPTS());
+    let opened = false;
+    // 信令服务器不吭声时（被网络挡了 / 它正忙）别让人干等，直接说清楚还能怎么玩
+    const waitTimer = setTimeout(() => {
+      if (opened) return;
+      APP.status = '联机服务器一直没回应（可能被网络限制了，或者它正忙）。这一局你可以先加电脑玩家玩；想让朋友连进来，换个网络再刷新页面试试。';
+      VIEW.render();
+    }, 10000);
     peer.on('open', () => {
+      opened = true;
+      clearTimeout(waitTimer);
       APP.status = '';
       broadcast(true);
       VIEW.render();
@@ -3660,6 +3744,17 @@ const ROOM = (function () {
     peer.on('disconnected', () => {
       try { peer.reconnect(); } catch (e) { /* 忽略 */ }
     });
+    // 公共信令服务器偶尔会自己把空闲连接掐掉。不主动往回接的话，
+    // 房间号还挂在屏幕上，但别人已经搜不到这个房间了 —— 这是"刚才还能连、现在突然连不上"的常见原因。
+    if (hostKeepAlive) clearInterval(hostKeepAlive);
+    hostKeepAlive = setInterval(() => {
+      if (!isHost || !peer || peer.destroyed) return;
+      if (peer.disconnected) {
+        APP.status = '和联机服务器的连接断了，正在重连…（这段时间别人可能加不进来）';
+        VIEW.render();
+        try { peer.reconnect(); } catch (e) { /* 忽略 */ }
+      }
+    }, 5000);
   }
 
   /* --------------------------------------------------------------- 加入 */
@@ -3673,28 +3768,84 @@ const ROOM = (function () {
     APP.mode = 'room';
     APP.status = '正在连接房间 ' + code + '…';
     VIEW.render();
-    openClientPeer(name, 0);
+    joinToken++;                       // 新一轮加入：作废掉上一轮还在跑的定时器/回调
+    openClientPeer(name, 0, joinToken);
   }
 
-  function openClientPeer(name, retry) {
+  /**
+   * 客户端连房主。整件事分两段，失败原因也分两段报，别都甩一句"超时"：
+   *   ① 连信令服务器（WebSocket）—— 连不上＝网络把它挡了，或它正忙
+   *   ② 和房主打洞（WebRTC/ICE）—— 打不通＝双方 NAT 太严 / 同一 WiFi 的设备隔离
+   * ②失败会自动重试一轮（换个机会重新协商，有时第二次就成了），再不行才报错给人话。
+   */
+  function openClientPeer(name, attempt, token) {
     try { if (peer) peer.destroy(); } catch (e) { /* 忽略 */ }
-    peer = new window.Peer(null, { debug: 1 });
+    attempt = attempt || 1;
+    if (token == null) token = ++joinToken;
+    // stale：这一轮连接已经被作废了（玩家取消了、或者又点了别的房间）。
+    // 没有这个判断的话，取消之后那个 9 秒超时还会准时弹一个"连不上"出来吓人。
+    const stale = () => token !== joinToken;
+    let signaled = false;
+    let settled = false;                 // 这次尝试有结论了（成功 / 报错 / 交给下一轮）
+    let signalTimer = null, punchTimer = null, welcomeTimer = null;
+
+    const stopTimers = () => { clearTimeout(signalTimer); clearTimeout(punchTimer); clearTimeout(welcomeTimer); };
+    const giveUp = kind => {
+      if (settled || stale()) return;
+      settled = true;
+      stopTimers();
+      if (kind === 'punch' && attempt < JOIN_MAX_ATTEMPT) {      // 打洞失败：自动再试一次
+        APP.status = `这次没打洞成功，自动再试一次（${attempt + 1}/${JOIN_MAX_ATTEMPT}）…`;
+        VIEW.render();
+        setTimeout(() => openClientPeer(name, attempt + 1, token), 800);
+        return;
+      }
+      failJoin(joinFailText(kind));
+    };
+
+    status(attempt > 1 ? `第 ${attempt} 次尝试：正在联系联机服务器…` : '正在联系联机服务器…');
+    peer = new window.Peer(null, PEER_OPTS());
+    signalTimer = setTimeout(() => giveUp('signal'), SIGNAL_TIMEOUT_MS);
+
     peer.on('open', () => {
+      if (settled || stale()) return;
+      signaled = true;
+      clearTimeout(signalTimer);
+      APP.status = '服务器已连上，正在和房主打洞…（几秒钟，别急着关页面）';
+      VIEW.render();
+
       const conn = peer.connect(PEER_PREFIX + code, { reliable: true });
       myConn = conn;
-      const timer = setTimeout(() => {
-        if (!conn.open) { failJoin('连接超时：房间号对不对？房主还在房间里吗？'); }
-      }, 12000);
+      punchTimer = setTimeout(() => giveUp('punch'), PUNCH_TIMEOUT_MS);
+
+      // ICE 自己报 failed 时立刻收工：对称 NAT 大概 5~10 秒就会 failed，
+      // 干等 14 秒超时只会让人以为"卡死了"。
+      try {
+        const pc = conn.peerConnection;
+        if (pc && pc.addEventListener) {
+          pc.addEventListener('iceconnectionstatechange', () => {
+            if (pc.iceConnectionState === 'failed') giveUp('punch');
+          });
+        }
+      } catch (e) { /* 拿不到底层连接就算了，还有超时兜底 */ }
+
+      let wasOpen = false;
       conn.on('open', () => {
-        clearTimeout(timer);
-        joinRetry = 0;
+        if (settled || stale()) return;
+        wasOpen = true;
+        clearTimeout(punchTimer);
+        reconnectCount = 0;
         APP.status = '';
         conn.send({ t: 'join', name: String(name || '玩家').slice(0, 8), id: myId });
         VIEW.render();
+        // 通道开了、但房主一直不回话（他的标签页被浏览器冻住了）也要说清楚
+        welcomeTimer = setTimeout(() => { if (!settled && !APP.pub) giveUp('hostidle'); }, WELCOME_TIMEOUT_MS);
       });
       conn.on('data', d => {
-        if (!d || !d.t) return;
+        if (!d || !d.t || stale()) return;
         if (d.t === 'state') {
+          clearTimeout(welcomeTimer);
+          settled = true;                        // 收到房主的快照＝这次连接彻底成了
           APP.roomCode = d.code || code;
           VIEW.update(d.pub, d.remainMs, d.remainTotal);
         } else if (d.t === 'err') {
@@ -3702,22 +3853,47 @@ const ROOM = (function () {
         }
       });
       conn.on('close', () => {
-        clearTimeout(timer);
-        if (joinRetry < 3) {
-          joinRetry++;
-          APP.status = '和房主断开了，正在重连…（' + joinRetry + '/3）';
+        stopTimers();
+        if (stale()) return;
+        if (!wasOpen) { giveUp('punch'); return; }        // 通道压根没开起来 → 打洞没成
+        if (!settled) { giveUp('hostidle'); return; }     // 通道开了，房主却没回话
+        // 连上之后才断的：多半是网络抖了一下，自动重连几次
+        if (reconnectCount < 3) {
+          reconnectCount++;
+          APP.status = '和房主断开了，正在重连…（' + reconnectCount + '/3）';
           VIEW.render();
-          setTimeout(() => openClientPeer(name, joinRetry), 1500);
+          setTimeout(() => openClientPeer(name, 1), 1500);
         } else {
-          failJoin('房主离开了房间');
+          failJoin('和房主断开太多次了（' + reconnectCount + ' 次都没接上）。让房主看看他的页面还在不在，然后重新开个房吧。');
         }
       });
-      conn.on('error', () => { clearTimeout(timer); failJoin('连接出错，房间可能已经关了'); });
+      conn.on('error', err => {
+        if (stale()) return;
+        if (wasOpen && settled) {
+          failJoin('和房主的连接断了：' + ((err && err.message) || (err && err.type) || '原因不明') + '。可以让房主刷新页面重建房间。');
+          return;
+        }
+        giveUp(wasOpen ? 'hostidle' : 'punch');
+      });
     });
+
     peer.on('error', err => {
+      if (settled || stale()) return;
       const type = err && err.type;
-      if (type === 'peer-unavailable') failJoin('没找到房间 ' + code + '（房间号写错？或者房主已经退出了）');
-      else failJoin('联机出错：' + (err && err.message ? err.message : type || '未知'));
+      if (type === 'peer-unavailable') {
+        settled = true;                          // 房间不存在，重试也没用
+        stopTimers();
+        failJoin(joinFailText('unavailable'));
+        return;
+      }
+      if (type === 'browser-incompatible') {
+        settled = true;
+        stopTimers();
+        failJoin('这个浏览器不支持 WebRTC 联机（换个 Chrome / Edge / Safari 新版本）。');
+        return;
+      }
+      // 还没连上信令 → 算信令问题；已经连上还出错 → 算打洞问题
+      giveUp(signaled ? 'punch' : 'signal');
     });
   }
 
@@ -3858,6 +4034,9 @@ const ROOM = (function () {
     try { if (peer) peer.destroy(); } catch (e) { /* 忽略 */ }
     peer = null; myConn = null; conns = [];
     if (ticker) { clearInterval(ticker); ticker = null; }
+    if (hostKeepAlive) { clearInterval(hostKeepAlive); hostKeepAlive = null; }
+    reconnectCount = 0;
+    joinToken++;                      // 作废正在跑的那一轮加入（取消/离开后别再弹错误）
     isHost = false; state = null; code = '';
     APP.mode = 'home'; APP.pub = null; APP.status = ''; APP.roomCode = '';
     APP.isHost = false; APP.me = null; APP.remainMs = 0;
@@ -3868,7 +4047,10 @@ const ROOM = (function () {
   return {
     create: create, join: join, start: start, addBot: addBot, kick: kick,
     setSetting: setSetting, rematch: rematch, submit: submit, unlock: unlock, leave: leave, setReady: setReady,
-    isHost: () => isHost, code: () => code, myId: () => myId
+    isHost: () => isHost, code: () => code, myId: () => myId,
+    // 这两个只给自测用：把"连不上"的诊断口径钉住，免得以后被顺手改回默认的 Google STUN
+    iceServers: () => ICE_SERVERS.map(s => s.urls),
+    failText: joinFailText
   };
 })();
 </script>
