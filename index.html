@@ -302,7 +302,7 @@ ul { margin: 0; padding: 0; list-style: none; }
   from { opacity: 0; transform: translateY(6px) scale(.96); }
   to   { opacity: 1; transform: none; }
 }
-.rv { animation: pop-in .3s cubic-bezier(.2, .9, .3, 1.2) both; }
+.rv { animation: pop-in .38s cubic-bezier(.2, .9, .3, 1.2) both; }
 
 /* 飘起来的伤害数字 */
 @keyframes dmg-pop {
@@ -314,7 +314,7 @@ ul { margin: 0; padding: 0; list-style: none; }
   position: absolute; right: 10px; top: 6px; z-index: 5;
   font-size: 22px; font-weight: 800; color: var(--red);
   text-shadow: 0 1px 0 #fff, 0 0 8px rgba(239, 68, 68, .35);
-  animation: dmg-pop 1s ease-out both; pointer-events: none;
+  animation: dmg-pop 1.3s ease-out both; pointer-events: none;
 }
 
 /* 挨致命一击时抖一下 */
@@ -325,7 +325,7 @@ ul { margin: 0; padding: 0; list-style: none; }
   55% { transform: translateX(-3px); }
   75% { transform: translateX(3px); }
 }
-.pcard .inner.dying { animation: shake .45s ease-in-out both; }
+.pcard .inner.dying { animation: shake .5s ease-in-out both; }
 
 /* 死亡标记 */
 @keyframes skull-in {
@@ -335,7 +335,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 }
 .skull {
   position: absolute; right: 8px; bottom: 6px; z-index: 6;
-  font-size: 22px; animation: skull-in .45s ease-out both;
+  font-size: 22px; animation: skull-in .5s ease-out both;
 }
 
 /* 完全死亡的玩家：头像变黑白（决斗中的不算完全死亡，保持彩色） */
@@ -354,7 +354,7 @@ svg.arrows {
   pointer-events: none; z-index: 4; overflow: visible;
 }
 @keyframes draw-arrow { to { stroke-dashoffset: 0; } }
-svg.arrows path { animation: draw-arrow .45s ease-out both; }
+svg.arrows path { animation: draw-arrow .5s ease-out both; }
 
 /* 卡片上的出招明细：一行"我打谁"，一行"被谁打" */
 .pcard .act .who { font-weight: 600; color: var(--ink); }
@@ -364,6 +364,81 @@ svg.arrows path { animation: draw-arrow .45s ease-out both; }
 .logbox { white-space: pre-line; }
 .log-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
 .log-legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+/* -------------------------------------------- 结算演出：字幕条 / 亮框 / 结算行 */
+/* 顶部字幕：按拍子依次念出"现在演到谁"，后来的盖住前面的 */
+.reveal-caption { position: relative; height: 28px; margin-top: 10px; }
+.reveal-caption .cap {
+  position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--card); border-radius: 999px; box-shadow: var(--shadow);
+  font-size: 13.5px; font-weight: 600; color: var(--ink);
+  opacity: 0; animation: cap-in .18s ease-out both;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 0 12px;
+}
+@keyframes cap-in { to { opacity: 1; } }
+
+/* 正在出手的人：亮一下边框，让人知道现在演到谁 */
+@keyframes act-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+  35% { box-shadow: 0 0 0 4px rgba(59, 130, 246, .35); }
+}
+.pcard.acting { animation: act-pulse 1.1s ease-out both; }
+
+/* 挨打（没死也）抖一下 */
+.pcard .inner.hit { animation: shake .45s ease-in-out both; }
+
+/* 结算行与花费 */
+.pcard .act .ev.sumline { color: var(--ink); font-weight: 600; background: var(--line-2); border-radius: 6px; padding: 1px 6px; }
+.pcard .act .cost { color: var(--amber); font-weight: 600; font-size: 12px; margin-left: 6px; }
+
+/* 连线画完停一会儿就淡出，免得一屏全是线 */
+@keyframes arrow-fade { to { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-caption .cap, .pcard.acting, .pcard .inner.hit { animation: none !important; opacity: 1 !important; }
+  svg.arrows path { animation: draw-arrow .01s linear both !important; }
+}
+
+/* --------------------------------- 飞刀 / 盾牌：真正的几何动画（沿路径飞行） */
+.fx { position: absolute; inset: 0; pointer-events: none; z-index: 6; overflow: visible; }
+.fly {
+  position: absolute; left: 0; top: 0;
+  display: inline-block; font-size: 17px; line-height: 1;
+  offset-rotate: 0deg;
+  animation-name: fly, puff;
+  animation-timing-function: ease-in, ease-out;
+  animation-duration: .55s, .28s;
+  animation-fill-mode: both, both;
+}
+@keyframes fly {
+  from { offset-distance: 0%; opacity: 0; }
+  18% { opacity: 1; }
+  to { offset-distance: 100%; opacity: 1; }
+}
+@keyframes puff { from { opacity: 1; } to { opacity: 0; } }
+.fly.back { font-size: 16px; filter: drop-shadow(0 0 5px rgba(239, 68, 68, .95)); }
+
+.shield {
+  position: absolute; display: inline-block; font-size: 27px; line-height: 1;
+  transform: translate(-50%, -50%);
+  animation-name: shield-pop, puff;
+  animation-timing-function: ease-out, ease-in;
+  animation-duration: .38s, .32s;
+  animation-fill-mode: both, both;
+}
+.shield.block { filter: drop-shadow(0 0 7px rgba(59, 130, 246, .95)); }
+.shield.rev { filter: drop-shadow(0 0 8px rgba(245, 158, 11, .95)); font-size: 30px; }
+@keyframes shield-pop {
+  from { transform: translate(-50%, -50%) scale(.3); opacity: 0; }
+  55% { transform: translate(-50%, -50%) scale(1.25); opacity: 1; }
+  to { transform: translate(-50%, -50%) scale(1); opacity: .95; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx { display: none; }               /* 关掉动效时只留连线，别让道具堆在角落里 */
+}
 </style>
 </head>
 <body>
@@ -431,7 +506,7 @@ const BADAO = (function () {
     { id: 'feimei', name: '肥美', cost: 0, kind: 'attack', atk: 0.5, icon: '🍖', giftOnly: true,
       desc: '不死的赠品。伤害 0.5。' },
     { id: 'diefei', name: '叠肥', cost: 0, kind: 'attack', atk: FEI_ATK, icon: '🥩', consume: { feimei: 3 },
-      desc: '消耗 3 个肥美，造成 2-ε 伤害。' },
+      desc: '独立道具，不是"叠肥美"：吃掉 3 个肥美，造成 2-ε 伤害。不可叠，打一个人就要吃 3 个。' },
     { id: 'cibao', name: '磁暴', cost: 2, kind: 'smite', smiteOn: ['cidun'], icon: '🧲',
       desc: '目标若出磁盾，立刻暴毙；否则无事发生。无伤害。' },
 
@@ -473,11 +548,13 @@ const BADAO = (function () {
   const PACK_KEYS = ['hp', 'rainbow', 'self'];
   const PACK_NAMES = { hp: '血量拓展', rainbow: '彩虹斩叠加', self: '自守拓展' };
 
-  /* 可「叠」的道具＝同回合能对同一个人用多个。
-     原文明确写过的：精血（可叠加）、彩虹斩（拓展包 n 倍）、偷（不论使用数量）；
-     剑气 / 天雷 / 肥美与精血同源（原文都用「每个……」描述多个），一并按可叠处理。
-     其余道具一律不可叠：每回合对一个人只能用一次。 */
-  const STACKABLE = ['jingxue', 'jianqi', 'tianlei', 'feimei', 'tou'];
+  /* 可「叠」的道具＝同回合能对同一个人用多个。只有原规则**明确写过**的才算：
+       · 精血：「本道具每个上吊赠送一个，伤害 0.5，可叠加」
+       · 彩虹斩：「可以 n 倍叠加使用」（要房主开叠加包）
+       · 偷：「不论使用数量本回合防御均为 0.5」
+     其余一律不可叠（每回合对一个人只能用一次），包括剑气 / 天雷 / 肥美 / 叠肥 ——
+     叠肥是一个**独立的道具**（吃掉 3 个肥美造成 2-ε），不是"把肥美叠起来"。 */
+  const STACKABLE = ['jingxue', 'tou'];
   function isStackable(state, id) {
     if (id === 'caihong') return !!state.settings.packs.rainbow;
     return STACKABLE.indexOf(id) >= 0;
@@ -512,7 +589,7 @@ const BADAO = (function () {
     const s = {
       players: [], round: 1, phase: 'lobby', winner: null,
       settings: Object.assign(
-        { selectSec: 5, revealSec: 3, autoAdvance: true, ecoOpen: false, packs: {} },
+        { selectSec: 5, revealSec: 5, autoAdvance: true, ecoOpen: false, packs: {} },
         settings || {}),
       log: [], lastResult: null
     };
@@ -710,7 +787,7 @@ const BADAO = (function () {
     /* 1) 「集」先入账，再扣费（可透支刚集的点） */
     alive().forEach(p => {
       const n = countOf(p.roundData.items, 'ji');
-      if (n > 0) { p.points += n; rd(p.id).events.push(`集 ×${n} → 点数 +${n}`); }
+      if (n > 0) { p.points += n; rd(p.id).events.push('出「集」'); }
     });
     alive().forEach(p => {
       const cost = totalCost(state, p, p.roundData.items);
@@ -725,46 +802,53 @@ const BADAO = (function () {
         if (it.giftOnly) p.bag[id] = Math.max(0, num(p.bag[id]) - c);
         if (it.consume) Object.keys(it.consume).forEach(k => { p.bag[k] = Math.max(0, num(p.bag[k]) - c * it.consume[k]); });
       });
-      if (cost > 0) rd(p.id).events.push(`消耗 ${round2(cost)} 点`);
       // 「偷」把防御锁成 0.5
       if (countOf(p.roundData.items, 'tou') > 0) { p.roundData.defOverride = ITEMS.tou.specialDef; }
     });
 
-    /* 2) 偷：先处理（点数转移 + 暴毙） */
+    /* 2) 偷：逐个目标独立结算 ——
+       出「集」的人点数照偷（不管别人出什么）；只要有人出防/反盾/自守/合掌，小偷必死。
+       所以顺序是"先按人头结算偷取，再统一判小偷的死"。 */
     alive().forEach(thief => {
       if (!countOf(thief.roundData.items, 'tou')) return;
-      const targets = Array.from(new Set(thief.roundData.steal));
+      const targets = Array.from(new Set(thief.roundData.steal))
+        .map(id => getPlayer(state, id))
+        .filter(t => t && t.alive && t.roundData);
       if (!targets.length) { rd(thief.id).events.push('偷：没有指定对象'); return; }
-      for (let i = 0; i < targets.length; i++) {
-        const t = getPlayer(state, targets[i]);
-        if (!t || !t.alive) continue;
+      let doomed = null;
+      targets.forEach(t => {
         const gated = Object.keys(t.roundData.items).some(id =>
           STEAL_GATE_KINDS.indexOf(ITEMS[id] && ITEMS[id].kind) >= 0);
-        if (gated) {
-          rd(thief.id).events.push(`偷 ${t.name} 被识破 → 立刻暴毙`);
-          killPlayer(state, thief, `偷 ${t.name} 被识破`, [], { noSelfGuard: true });
-          break;
-        }
+        if (gated) { if (!doomed) doomed = t; return; }          // 先记下来，偷取照常走完
         if (countOf(t.roundData.items, 'ji') > 0) {
           const amt = t.points;
           t.points = 0; thief.points += amt;
           rd(thief.id).stolenFrom.push({ id: t.id, name: t.name, amount: amt });
           rd(t.id).stolenBy.push({ id: thief.id, name: thief.name, amount: amt });
-          rd(thief.id).events.push(`偷走 ${t.name} 全部点数 ${round2(amt)} 点`);
-          rd(t.id).events.push(`被 ${thief.name} 偷走 ${round2(amt)} 点`);
+          rd(thief.id).events.push(`偷走 ${t.name} 的全部点数`);
+          rd(t.id).events.push(`被 ${thief.name} 偷走了点数`);
         } else {
           rd(thief.id).events.push(`偷 ${t.name}：他在做别的事，无事发生`);
         }
+      });
+      if (doomed) {
+        rd(thief.id).events.push(`${doomed.name} 出了防 / 反盾 / 自守 / 合掌 → 你当场暴毙`);
+        killPlayer(state, thief, `偷 ${doomed.name} 被识破`, [], { noSelfGuard: true });
       }
     });
 
-    /* 3) 各人防御 */
+    /* 3) 各人防御：防御道具的防御 + **攻击道具自带的防御**（攻击 x 点就自带 x 点防御，互砍不再双死） */
     alive().forEach(p => {
-      let d = 0;
+      let dItem = 0, dAtk = 0;
       Object.keys(p.roundData.items).forEach(id => {
         const it = ITEMS[id], c = countOf(p.roundData.items, id);
-        if (it && (it.kind === 'defense' || it.kind === 'heal' || it.kind === 'selfguard') && it.def) d += it.def * c;
+        if (!it) return;
+        if ((it.kind === 'defense' || it.kind === 'heal' || it.kind === 'selfguard') && it.def) dItem += it.def * c;
+        if (it.kind === 'attack' && it.atk) dAtk += it.atk * c;
       });
+      p.roundData.defItem = dItem;
+      p.roundData.defAttack = dAtk;
+      let d = dItem + dAtk;
       if (p.roundData.defOverride != null) d = p.roundData.defOverride;   // 偷 → 0.5
       p.roundData.def = d;
       if (countOf(p.roundData.items, 'zishou') > 0) {
@@ -839,7 +923,7 @@ const BADAO = (function () {
       if (data.hpBefore - dmg < -EPS) {
         data.hpAfter = 0;
         data.events.push(`受到 ${round2(dmg)} 点伤害 → 血量 ${fmtNum(data.hpBefore)} 撑不住`);
-        killPlayer(state, p, `被 ${round2(dmg)} 点伤害打死`, killers, {});
+        killPlayer(state, p, `被打死（合计 ${round2(g)} 点 − 防御 ${fmtNum(data.def)} = 掉 ${round2(dmg)} 点）`, killers, {});
       } else {
         data.hpAfter = data.hpBefore - dmg;
         data.events.push(`受到 ${round2(dmg)} 点伤害 → 血量 ${fmtNum(data.hpBefore)} → ${fmtNum(data.hpAfter)}`);
@@ -855,15 +939,18 @@ const BADAO = (function () {
       }
     });
 
-    /* 7) 磁暴：目标出磁盾就暴毙 */
-    alive().forEach(src => {
+    /* 7) 磁暴：目标出磁盾就暴毙。
+       注意：要按"本回合出过磁暴的人"来遍历 —— 而不是"现在还活着的人"，
+       否则先被别人砍死的人，他的磁暴就白白失效了（同一回合应当同时结算）。 */
+    state.players.forEach(src => {
       const c = countOf(src.roundData.items, 'cibao');
-      if (!c) return;
+      if (!c || !src.roundData.alive) return;
       const alloc = src.roundData.alloc.cibao || {};
       Object.keys(alloc).forEach(tid => {
         const t = getPlayer(state, tid);
-        if (!t || !t.alive) return;
+        if (!t || !t.roundData) return;
         if (num(alloc[tid]) > 0 && countOf(t.roundData.items, 'cidun') > 0) {
+          if (!t.alive) return;                       // 已经死了就不重复判
           t.roundData.events.push(`${src.name} 的磁暴命中磁盾 → 立刻暴毙`);
           src.roundData.hits.push({ to: tid, item: 'cibao', dmg: 0 });
           killPlayer(state, t, '被磁暴破盾', [src.id], {});
@@ -920,47 +1007,89 @@ const BADAO = (function () {
     state.lastResult = result;
     // 回合数由结算内部推进，避免"调用方忘记加一"导致决斗计时永不走动
     state.round = round + 1;
-    // 日志：一回合一条（多行），按"谁对谁做了什么"排好，比碎句好读
-    state.log.push(buildRoundLog(state, result));
+    // 日志：一回合一条（结构化，发快照时再按"给谁看"渲染，点数才不会漏）
+    state.log.push(buildRoundEntry(state, result));
     if (state.log.length > 200) state.log = state.log.slice(-200);
     return result;
   }
 
-  /** 把一回合的结果整理成"谁对谁做了什么"的可读日志（一回合一条多行记录） */
-  function buildRoundLog(state, result) {
+  /**
+   * 一回合的日志：结构化存起来，等发快照时再按"给谁看"决定要不要露点数数额。
+   * 这样"点数不显示"才能做到彻底——连日志里的数额都不给。
+   */
+  function buildRoundEntry(state, result) {
     const r = result.round;
-    const lines = [];
-    const rounds = v => round2(v);
+    const atk = [], mid = [], last = [];      // 分三段排：先"谁打谁"，再防御/花费，最后阵亡与结算
     result.reports.forEach(rep => {
       (rep.hits || []).forEach(h => {
-        const itn = ITEMS[h.item] ? ITEMS[h.item].name : h.item;
-        const to = nameOf(state, h.to);
-        lines.push(h.dmg > EPS
-          ? `⚔ ${rep.name} 用「${itn}」打 ${to}（${rounds(h.dmg)} 点）`
-          : `⚔ ${rep.name} 用「${itn}」打 ${to}`);
+        atk.push({
+          t: 'hit', id: rep.id, from: rep.name, to: nameOf(state, h.to),
+          item: ITEMS[h.item] ? ITEMS[h.item].name : h.item, dmg: h.dmg
+        });
       });
-      if (rep.reverse && rep.reverse.success) {
-        lines.push(`🪃 ${rep.name} 反盾成功（${rounds(rep.gross)} ≤ ${rep.reverse.range}）→ 弹死 ${(rep.reverseBack || []).map(x => nameOf(state, x)).join('、') || '（无人）'}`);
-      } else if (rep.reverse && rep.reverse.success === false) {
-        lines.push(`🪃 ${rep.name} 反盾被破（${rounds(rep.gross)} > ${rep.reverse.range}）→ 反盾者暴毙`);
+      if (rep.reverse) {
+        atk.push({
+          t: 'reverse', id: rep.id, who: rep.name, ok: !!rep.reverse.success,
+          gross: rep.gross, range: rep.reverse.range,
+          killed: (rep.reverseBack || []).map(x => nameOf(state, x))
+        });
       }
-      (rep.stolenFrom || []).forEach(s => lines.push(`🫳 ${rep.name} 偷走 ${s.name} 的 ${rounds(s.amount)} 点`));
-      (rep.stolenBy || []).forEach(s => lines.push(`🫳 ${s.name} 从 ${rep.name} 身上偷走 ${rounds(s.amount)} 点`));
+      (rep.stolenFrom || []).forEach(s => atk.push({ t: 'steal', id: rep.id, from: rep.name, to: s.name, amt: s.amount }));
       if (rep.def > 0 && rep.gross > EPS && !(rep.damage > EPS)) {
-        lines.push(`🛡 ${rep.name} 防御 ${fmtNum(rep.def)} 挡下 ${rounds(rep.gross)} 点`);
+        mid.push({ t: 'block', id: rep.id, who: rep.name, def: rep.def, gross: rep.gross, defAttack: rep.defAttack || 0 });
       }
-      if (rep.dead) lines.push(`☠ ${rep.name} 阵亡 —— ${rep.deathCause}`);
-      if (rep.autoJi) lines.push(`⏱ ${rep.name} 超时没锁定 → 自动出「集」`);
+      if (rep.cost > 0) mid.push({ t: 'cost', id: rep.id, who: rep.name, cost: rep.cost });
       if (rep.giftGained && Object.keys(rep.giftGained).length) {
-        lines.push(`🎁 ${rep.name} 获得 ${Object.keys(rep.giftGained).map(g => ITEMS[g].name + '×' + rep.giftGained[g]).join('、')}`);
+        mid.push({
+          t: 'gift', id: rep.id, who: rep.name,
+          gifts: Object.keys(rep.giftGained).map(g => ITEMS[g].name + '×' + rep.giftGained[g]).join('、')
+        });
       }
-      rep.events.filter(e => /决斗/.test(e)).forEach(e => lines.push(`🥊 ${rep.name}：${e}`));
+      if (rep.autoJi) mid.push({ t: 'auto', id: rep.id, who: rep.name });
+      if (rep.dead) last.push({ t: 'death', id: rep.id, who: rep.name, cause: rep.deathCause });
+      rep.events.filter(e => /决斗/.test(e)).forEach(e => last.push({ t: 'duel', id: rep.id, who: rep.name, text: e }));
     });
     const left = alivePlayers(state);
-    lines.push(`—— 存活 ${left.length} 人${left.length ? '：' + left.map(p => p.name).join('、') : ''}`);
-    if (left.length === 1) lines.push(`🏆 ${left[0].name} 拔得头筹！`);
-    else if (!left.length) lines.push('🤝 全员阵亡，平局');
-    return `【第 ${r} 回合】\n` + (lines.length ? lines.join('\n') : '（这一回合大家都在观望）');
+    last.push({ t: 'sum', alive: left.map(p => p.name) });
+    if (left.length === 1) last.push({ t: 'win', who: left[0].name });
+    else if (!left.length) last.push({ t: 'draw' });
+    return { k: 'round', r: r, lines: atk.concat(mid, last) };
+  }
+
+  /** 把结构化日志渲染成文字；opts.showAll=false 时，别人的点数数额一笔都不露 */
+  function formatLogEntry(e, opts) {
+    opts = opts || {};
+    const show = id => !!opts.showAll || (!!opts.viewerId && id === opts.viewerId);
+    if (e.k === 'text') return e.s;
+    const out = [];
+    e.lines.forEach(l => {
+      switch (l.t) {
+        case 'hit':
+          out.push(`⚔ ${l.from} 用「${l.item}」打 ${l.to}（${round2(l.dmg)} 点）`);
+          break;
+        case 'reverse':
+          out.push(l.ok
+            ? `🪃 ${l.who} 反盾成功（${round2(l.gross)} ≤ ${l.range}）→ 弹死 ${l.killed.join('、') || '（无人）'}`
+            : `🪃 ${l.who} 反盾被破（${round2(l.gross)} > ${l.range}）→ 反盾者暴毙`);
+          break;
+        case 'block':
+          out.push(`🛡 ${l.who} 防御 ${fmtNum(l.def)}${l.defAttack ? `（含攻击自带 ${fmtNum(l.defAttack)}）` : ''} 挡下 ${round2(l.gross)} 点`);
+          break;
+        case 'death': out.push(`☠ ${l.who} 阵亡 —— ${l.cause}`); break;
+        case 'cost': if (show(l.id)) out.push(`💸 ${l.who} 消耗 ${round2(l.cost)} 点`); break;
+        case 'steal':
+          out.push(`🫳 ${l.from} 偷走 ${l.to} 的全部点数${show(l.id) && l.amt != null ? `（${round2(l.amt)} 点）` : ''}`);
+          break;
+        case 'gift': out.push(`🎁 ${l.who} 获得 ${l.gifts}`); break;
+        case 'auto': out.push(`⏱ ${l.who} 超时没锁定 → 自动出「集」`); break;
+        case 'duel': out.push(`🥊 ${l.who}：${l.text}`); break;
+        case 'sum': out.push(`—— 存活 ${l.alive.length} 人${l.alive.length ? '：' + l.alive.join('、') : ''}`); break;
+        case 'win': out.push(`🏆 ${l.who} 拔得头筹！`); break;
+        case 'draw': out.push('🤝 全员阵亡，平局'); break;
+        default: break;
+      }
+    });
+    return `【第 ${e.r} 回合】\n` + (out.length ? out.join('\n') : '（这一回合大家都在观望）');
   }
 
   function fmtNum(v) { return v === Infinity ? '∞' : String(round2(v)); }
@@ -1086,12 +1215,12 @@ const BADAO = (function () {
     const cands = [];
     const add = (w, iid, count, targets) => cands.push({ w: w, o: { id: iid, count: count, targets: targets || [] } });
 
-    // 1) 赠品：不花点数就能打人，优先用掉
-    if (num(p.bag.tianlei) > 0) add(26, 'tianlei', Math.min(num(p.bag.tianlei), 2), aim(1));
-    if (num(p.bag.jianqi) > 0) add(22, 'jianqi', Math.min(num(p.bag.jianqi), 2), aim(1));
-    if (num(p.bag.jingxue) > 0) add(16, 'jingxue', Math.min(num(p.bag.jingxue), 4), aim(1));
+    // 1) 赠品：不花点数就能打人，优先用掉（都不可叠 → 一人一个，数量＝选中人数）
+    if (num(p.bag.tianlei) > 0) add(26, 'tianlei', 1, aim(1));
+    if (num(p.bag.jianqi) > 0) add(22, 'jianqi', 1, aim(1));
+    if (num(p.bag.jingxue) > 0) add(16, 'jingxue', Math.min(num(p.bag.jingxue), 2), aim(Math.min(2, num(p.bag.jingxue))));
     if (num(p.bag.feimei) >= 3) add(20, 'diefei', 1, aim(1));
-    else if (num(p.bag.feimei) > 0) add(14, 'feimei', num(p.bag.feimei), aim(1));
+    else if (num(p.bag.feimei) > 0) add(14, 'feimei', 1, aim(1));
 
     // 2) 集：手头紧就攒钱
     add(p.points <= 1 ? 45 : 12, 'ji', 1, []);
@@ -1133,20 +1262,37 @@ const BADAO = (function () {
   }
 
   /* --------------------------------------------------- 对外只读状态（发网） */
+  /** 按"给谁看"把结算战报里的点数数额抹掉（自己的那份保留） */
+  function sanitizeResult(res, showAll, viewer) {
+    if (!res || showAll) return res;
+    const out = Object.assign({}, res);
+    out.reports = res.reports.map(r => {
+      if (r.id === viewer) return r;
+      const o = Object.assign({}, r);
+      o.cost = null;
+      o.stolenFrom = (r.stolenFrom || []).map(s => ({ id: s.id, name: s.name, amount: null }));
+      o.stolenBy = (r.stolenBy || []).map(s => ({ id: s.id, name: s.name, amount: null }));
+      return o;
+    });
+    return out;
+  }
+
   /**
    * 隐藏别人还没公开的东西；展示阶段才全部公开。
    * opts.viewerId：这份快照是给谁看的（每个人拿到的快照不一样）。
-   * 选择阶段默认连"点数 / 背包"都只给自己看 —— 否则别人能靠点数消耗反推出你出了什么；
-   * 房主把 ecoOpen（点数公开）打开后，就按"桌上明牌"处理。
+   * 「点数公开」关掉时，是**全流程**都看不到别人的点数与背包（含结算展示与日志里的数额），
+   * 这样才没法靠"点数消耗"反推出对手出了什么。
    */
   function publicState(state, opts) {
     opts = opts || {};
     const viewer = opts.viewerId || null;
     const reveal = state.phase === 'reveal' || state.phase === 'over';
-    const hideEco = state.phase === 'select' && !state.settings.ecoOpen;
+    const ecoOpen = !!state.settings.ecoOpen;
+    const hideEco = !ecoOpen && state.phase !== 'lobby' && !!viewer;
+    const fmtOpts = { showAll: ecoOpen || !viewer, viewerId: viewer };
     const s = {
       round: state.round, phase: state.phase, winner: state.winner,
-      settings: state.settings, hostId: state.hostId, ecoOpen: !!state.settings.ecoOpen,
+      settings: state.settings, hostId: state.hostId, ecoOpen: ecoOpen,
       selectSec: state.settings.selectSec, revealSec: state.settings.revealSec,
       players: state.players.map(p => {
         const isMe = !!viewer && p.id === viewer;
@@ -1155,12 +1301,12 @@ const BADAO = (function () {
           alive: p.alive, hp: p.hp, points: p.points, bag: p.bag, submitted: p.submitted,
           ready: p.ready, inDuel: p.inDuel, duel: p.duel, selfGuardUntil: p.selfGuardUntil
         };
-        if (hideEco && viewer && !isMe) { o.points = null; o.bag = null; }   // 没指定 viewerId 就当作全量快照
+        if (hideEco && !isMe) { o.points = null; o.bag = null; }
         if (reveal) o.picks = p.picks;
         return o;
       }),
-      log: state.log.slice(-40),
-      lastResult: reveal ? state.lastResult : null,
+      log: state.log.slice(-40).map(e => formatLogEntry(e, fmtOpts)),
+      lastResult: reveal ? sanitizeResult(state.lastResult, ecoOpen || !viewer, viewer) : null,
       ecoHidden: hideEco
     };
     return s;
@@ -1275,8 +1421,19 @@ const VIEW = (function () {
   }
 
   const selOf = id => (draft.sel[id] || []).filter(t => foes().some(f => f.id === t));
-  /** 最多能打几个人：彩虹斩没开叠加包时只能打 1 个 */
-  const maxTargets = id => (id === 'caihong' && !packOn('rainbow') ? 1 : foes().length);
+  /** 最多能打几个人：受规则（彩虹斩没开包只能 1 个）和材料/赠品数量限制 */
+  function maxTargets(id) {
+    const me = mePlayer(), it = B.ITEMS[id];
+    let cap = (id === 'caihong' && !packOn('rainbow')) ? 1 : foes().length;
+    if (me && it) {
+      if (it.giftOnly) cap = Math.min(cap, me.bag[id] || 0);                                  // 一人要 1 个
+      if (it.consume) Object.keys(it.consume).forEach(k => {
+        cap = Math.min(cap, Math.floor((me.bag[k] || 0) / it.consume[k]));                     // 叠肥一人要 3 个肥美
+      });
+      if (isStack(id)) cap = foes().length;                                                    // 可叠道具只受人数限制
+    }
+    return Math.max(0, cap);
+  }
   /** 可叠道具最多能用几个（受背包 / 材料 / 点数限制） */
   function maxCount(id) {
     const me = mePlayer(), it = B.ITEMS[id];
@@ -1290,8 +1447,7 @@ const VIEW = (function () {
     const unit = B.unitCost(app.pub, me, id);
     if (unit > 0) cap = Math.min(cap, Math.floor(usablePoints() / unit));
     return Math.max(1, cap);
-  }
-  function usablePoints() {
+  }  function usablePoints() {
     const me = mePlayer();
     return me && me.points != null ? me.points : 0;
   }
@@ -1357,6 +1513,7 @@ const VIEW = (function () {
     renderSheet();
     renderTimer();
     drawArrows();
+    drawFx(app._tl);
     lastSig = sig();
   }
 
@@ -1551,12 +1708,13 @@ const VIEW = (function () {
     const me = mePlayer();
     const reveal = pub.phase === 'reveal';
     const roundNo = reveal ? (pub.lastResult ? pub.lastResult.round : pub.round) : pub.round;
-    const aliveN = pub.players.filter(p => p.alive).length;
-    // 结算动画：整段展示时间里把每个人的出招依次放出来
     const total = app.remainTotal || 3000;
-    const step = Math.max(110, Math.min(600, total * 0.35 / Math.max(1, aliveN)));
-    const animate = reveal && (total - app.remainMs) < total * 0.6;
-    app.revealStep = step;                 // 画连线时也用这个节奏
+    const aliveN = pub.players.filter(p => p.alive).length;
+    // 结算演出时间轴：每一拍＝一个出手的人（他打了谁 / 弹回谁 / 偷了谁）
+    const tl = reveal ? buildTimeline(pub.lastResult) : null;
+    app._tl = tl;                             // 画连线时要复用同一套时间轴
+    const animate = reveal && (total - app.remainMs) < total * 0.62;
+    app.revealStep = tl ? tl.step : 200;
 
     return `
     <div class="topbar"><div class="inner">
@@ -1573,7 +1731,8 @@ const VIEW = (function () {
     </div></div>
 
     <div class="wrap">
-      <div class="players">${pub.players.map((p, i) => playerCard(p, i, reveal, { step: step, animate: animate })).join('')}</div>
+      <div class="players">${pub.players.map((p, i) => playerCard(p, i, reveal, tl, animate)).join('')}</div>
+      ${reveal && tl ? captionHtml(tl) : ''}
       ${pub.ecoHidden ? '<div class="tiny muted" style="margin-top:6px;text-align:center">对方的点数与背包要等结算时才公开（免得被反推出谁出了什么）</div>'
         : (pub.ecoOpen ? '<div class="tiny muted" style="margin-top:6px;text-align:center">明牌局：所有人的点数都是公开的</div>' : '')}
 
@@ -1639,7 +1798,51 @@ const VIEW = (function () {
     `;
   }
 
-  function playerCard(p, i, reveal, anim) {
+  /* ------------------------------------------------- 结算演出（时间轴） */
+  /** 一句话说清这一拍干了什么 */
+  function beatText(rep, hits, back, steal) {
+    const label = Object.keys(rep.items || {})
+      .map(id => `${B.ITEMS[id] ? B.ITEMS[id].name : id}×${rep.items[id]}`).join('、') || '空手';
+    if (hits.length) return `⚔ ${label} → ${hits.map(h => `${nameOf(h.to)} −${fmtNum(h.dmg)}`).join('、')}`;
+    if (back.length) return `🪃 反盾弹回 → ${back.map(nameOf).join('、')}`;
+    if (steal.length) return `🫳 偷 → ${steal.map(s => s.name).join('、')}`;
+    return label;
+  }
+
+  /** 把一回合排成一串"拍子"：每一拍＝一个出手的人，以及他打到谁身上 */
+  function buildTimeline(res) {
+    const beats = [];
+    (res ? res.reports : []).forEach(rep => {
+      const hits = (rep.hits || []).filter(h => h.dmg > 0 || h.item === 'cibao');
+      const back = rep.reverseBack || [];
+      const steal = rep.stolenFrom || [];
+      if (!hits.length && !back.length && !steal.length) return;   // 没动手的人不占拍子
+      beats.push({ rep: rep, hits: hits, back: back, steal: steal, text: beatText(rep, hits, back, steal) });
+    });
+    const total = Math.max(1600, app.remainTotal || 5000);
+    // 放慢节奏：每拍之间至少 320ms，最多 1.1s，别让多个人的动作挤在一起
+    const step = Math.max(320, Math.min(1100, total * 0.62 / Math.max(1, beats.length)));
+    const impactOf = {}, actsAt = {};
+    (res ? res.reports : []).forEach(rep => { impactOf[rep.id] = total * 0.42; actsAt[rep.id] = 0; });
+    beats.forEach((b, i) => {
+      b.t = i * step;
+      b.impact = b.t + step * 0.55;
+      actsAt[b.rep.id] = b.t;
+      b.hits.forEach(h => { impactOf[h.to] = Math.max(impactOf[h.to] || 0, b.impact); });
+      b.back.forEach(id => { impactOf[id] = Math.max(impactOf[id] || 0, b.impact); });
+      b.steal.forEach(s => { impactOf[s.id] = Math.max(impactOf[s.id] || 0, b.impact); });
+    });
+    return { beats: beats, step: step, total: total, impactOf: impactOf, actsAt: actsAt };
+  }
+
+  /** 顶部字幕条：按拍子依次念出"现在演到谁"，后来的盖住前面的 */
+  function captionHtml(tl) {
+    if (!tl.beats.length) return `<div class="reveal-caption"><span class="cap" style="animation-delay:120ms">这一回合大家都在观望…</span></div>`;
+    return `<div class="reveal-caption">${tl.beats.map(b =>
+      `<span class="cap" style="animation-delay:${b.t + 80}ms">${esc(b.rep.name)} ${esc(b.text)}</span>`).join('')}</div>`;
+  }
+
+  function playerCard(p, i, reveal, tl, animate) {
     const flags = [];
     if (p.isHost) flags.push('<span class="badge amber">房主</span>');
     if (p.isBot) flags.push('<span class="badge grey">电脑</span>');
@@ -1650,44 +1853,63 @@ const VIEW = (function () {
     else if (p.selfGuardUntil >= (app.pub.round || 0)) flags.push(`<span class="badge purple">自守保护至 R${p.selfGuardUntil}</span>`);
     if (!reveal && p.alive && p.submitted) flags.push('<span class="badge green">已锁定</span>');
 
-    let act = '', dying = false;
-    if (reveal && p.picks) {
+    let act = '', dying = false, acting = false, hitShake = false;
+    if (reveal && p.picks && tl) {
       const rep = app.pub.lastResult ? app.pub.lastResult.reports.find(r => r.id === p.id) : null;
-      const d0 = i * anim.step;
+      const actT = tl.actsAt[p.id] || 0;
+      const impT = tl.impactOf[p.id] !== undefined ? tl.impactOf[p.id] : tl.total * 0.42;
       const events = rep ? rep.events : [];
       const hits = (rep && rep.hits) || [];
+      const incoming = incomingOf(p.id, tl);
+      const cls = animate ? 'rv' : '';
       dying = events.some(e => /阵亡|暴毙/.test(e));
+      acting = hits.length > 0 || (rep && rep.reverseBack && rep.reverseBack.length) || (rep && rep.stolenFrom && rep.stolenFrom.length);
+      hitShake = animate && incoming.length > 0 && !dying;
       const dmg = rep && rep.damage > 0 ? rep.damage : 0;
 
-      // 出招区：优先写成"谁打谁"（上吊×1 → 小李 −3），偷单独写，其余退回普通描述
-      const itemLabel = Object.keys(p.picks.items || {})
-        .map(id => `${B.ITEMS[id] ? B.ITEMS[id].name : id}×${p.picks.items[id]}`).join('、');
+      // 出招行：优先写成"谁打谁"（上吊×1 → 老王 −3），偷单独写，其余退回普通描述
+      // 注意用战报快照（rep.items），不能用 p.picks —— 结算末尾已经把手牌清空了
+      const itemsSnap = rep && rep.items ? rep.items : ((p.picks && p.picks.items) || {});
+      const stealSnap = rep && rep.steal ? rep.steal : ((p.picks && p.picks.steal) || []);
+      const itemLabel = Object.keys(itemsSnap)
+        .map(id => `${B.ITEMS[id] ? B.ITEMS[id].name : id}×${itemsSnap[id]}`).join('、');
       let head;
       if (hits.length) head = `${itemLabel} → ${hits.map(h => `${nameOf(h.to)} −${fmtNum(h.dmg)}`).join('、')}`;
-      else if (p.picks.items && p.picks.items.tou) {
-        head = `偷 → ${(p.picks.steal || []).map(nameOf).join('、') || '（没选人）'}`;
-      } else head = B.describePicks(app.pub, p.picks);
+      else if (itemsSnap.tou) head = `偷 → ${stealSnap.map(nameOf).join('、') || '（没选人）'}`;
+      else head = itemLabel || B.describePicks(app.pub, { items: itemsSnap, alloc: (rep && rep.alloc) || {}, steal: stealSnap });
+      const costTxt = (rep && rep.cost != null && rep.cost > 0) ? `<span class="cost">消耗 ${fmtNum(rep.cost)} 点</span>` : '';
 
-      // 被打的人：把自己的"挨打明细"写在最上面，一眼看出是谁干的
-      const incoming = incomingOf(p.id);
-      act = `<div class="act ${anim.animate ? 'rv' : ''}" style="animation-delay:${d0}ms">
-        <div class="who">${esc(head)}</div>
-        ${incoming.map(inc => `<span class="ev hit2 ${anim.animate ? 'rv' : ''}" style="animation-delay:${d0 + 120}ms"
-          >🩸 被 ${esc(inc.from)} 的「${esc(inc.itemName)}」打 −${fmtNum(inc.dmg)}</span>`).join('')}
+      // 挨打明细：每一击在对应拍子打到身上，最后给出"谁+谁=总共多少 − 防御 = 掉多少"
+      let sumLine = '';
+      if (rep && rep.gross > 0) {
+        const who = incoming.length ? incoming.map(x => `${x.from} ${fmtNum(x.dmg)}`).join(' + ') : '挨打';
+        const defTxt = rep.defAttack
+          ? `防御 ${fmtNum(rep.def)}（含刀自带 ${fmtNum(rep.defAttack)}）`
+          : `防御 ${fmtNum(rep.def)}`;
+        const tail = dmg > 0 ? `掉 ${fmtNum(dmg)} 点` : '全部挡下';
+        sumLine = `<span class="ev sumline ${cls}" style="animation-delay:${impT + 240}ms">🧮 ${esc(who)} = ${fmtNum(rep.gross)} 点 − ${defTxt} = ${tail}</span>`;
+      }
+
+      act = `<div class="act ${cls}" style="animation-delay:${actT}ms">
+        <div class="who">出招：${esc(head)}${costTxt}</div>
+        ${incoming.map(inc => `<span class="ev hit2 ${cls}" style="animation-delay:${inc.t}ms">🩸 被 ${esc(inc.from)} 的「${esc(inc.itemName)}」打 −${fmtNum(inc.dmg)}</span>`).join('')}
         ${events.map((e, j) => {
-          const cls = /阵亡|暴毙|☠️/.test(e) ? 'hit' : (/获得|防御|挡下|反盾成功/.test(e) ? 'good' : '');
-          return `<span class="ev ${cls} ${anim.animate ? 'rv' : ''}" style="animation-delay:${d0 + 200 + j * 110}ms">· ${esc(e)}</span>`;
+          const k = /阵亡|暴毙|☠️/.test(e) ? 'hit' : (/获得|防御|挡下|反盾成功/.test(e) ? 'good' : '');
+          return `<span class="ev ${k} ${cls}" style="animation-delay:${impT + 120 + j * 95}ms">· ${esc(e)}</span>`;
         }).join('')}
+        ${sumLine}
       </div>`;
       if (dmg) {
-        act = `<span class="dmgfly ${anim.animate ? 'rv-dmg' : ''}" style="animation-delay:${d0 + 120}ms">−${fmtNum(dmg)}</span>` + act;
+        act = `<span class="dmgfly ${animate ? 'rv-dmg' : ''}" style="animation-delay:${impT + 240}ms">−${fmtNum(dmg)}</span>` + act;
       }
       if (dying) {
-        act += `<span class="skull ${anim.animate ? 'rv' : ''}" style="animation-delay:${d0 + 300}ms">💀</span>`;
+        act += `<span class="skull ${cls}" style="animation-delay:${impT + 330}ms">💀</span>`;
       }
     }
-    return `<div class="pcard ${p.id === app.me ? 'me' : ''} ${!p.alive ? 'fully-dead' : ''}" data-pid="${esc(p.id)}">
-      <div class="inner ${dying && anim.animate ? 'dying' : ''}" style="animation-delay:${i * anim.step + 240}ms">
+    return `<div class="pcard ${p.id === app.me ? 'me' : ''} ${!p.alive ? 'fully-dead' : ''} ${acting && animate ? 'acting' : ''}"
+        data-pid="${esc(p.id)}" style="animation-delay:${tl ? (tl.actsAt[p.id] || 0) : 0}ms">
+      <div class="inner ${dying && animate ? 'dying' : ''} ${hitShake ? 'hit' : ''}"
+        style="animation-delay:${tl ? (tl.impactOf[p.id] !== undefined ? tl.impactOf[p.id] : tl.total * 0.42) : 0}ms">
       <div class="pname">
         <span class="avatar" style="background:${avatarOf(p)}">${initial(p.name)}</span>
         <span class="ellipsis">${esc(p.name)}</span>
@@ -1702,14 +1924,135 @@ const VIEW = (function () {
     </div>`;
   }
 
-  /** 这一回合谁打了他（画连线 + 卡片上写明细都用它） */
-  function incomingOf(id) {
-    const res = app.pub && app.pub.lastResult;
-    if (!res) return [];
+  /* ------------------------------------------- 飞刀 / 盾牌：几何特效层 */
+  // 这件道具飞出去"几把"、长什么样：双刀就是两把刀子，五刀就是五把
+  const PROJECTILE = {
+    yidao: ['🗡️', 1], shuangdao: ['🗡️', 2], shangdiao: ['🪢', 1], sidao: ['🔪', 4], wudao: ['🗡️', 5],
+    caihong: ['🌈', 1], cibao: ['🧲', 1], diefei: ['🥩', 1], podun: ['🪓', 1], du: ['☠️', 1], tou: ['🫳', 1]
+  };
+  function projFor(itemId, n) {
+    const p = PROJECTILE[itemId];
+    const icon = p ? p[0] : ((B.ITEMS[itemId] && B.ITEMS[itemId].icon) || '•');
+    const count = p ? p[1] : Math.max(1, Math.floor(n || 1));
+    return { icon: icon, count: Math.max(1, Math.min(5, count)) };
+  }
+
+  /** 在玩家格子上放一层"会飞的道具 + 盾牌"，让"谁打谁"变成看得见的动作 */
+  function drawFx(tl) {
+    const wrap = $('.players');
+    if (!wrap) return;
+    const old = wrap.querySelector('.fx');
+    if (old) old.remove();
+    const pub = app.pub, res = pub && pub.lastResult;
+    if (!pub || pub.phase !== 'reveal' || !res || !tl) return;
+    // 浏览器不支持沿路径运动（offset-path）就老老实实用连线
+    if (typeof CSS === 'undefined' || !CSS.supports || !CSS.supports('offset-path', 'path("M 0 0 L 1 1")')) return;
+    const box = wrap.getBoundingClientRect();
+    if (!box.width || !box.height) return;
+
+    const fx = document.createElement('div');
+    fx.className = 'fx';
+    const geo = id => {
+      const el = wrap.querySelector(`[data-pid="${id}"]`);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      if (!r.width && !r.height) return null;
+      return { x: r.left - box.left + r.width / 2, y: r.top - box.top + r.height / 2, w: r.width || 60, h: r.height || 40 };
+    };
+    const ends = (a, b) => {                       // 两端收到卡片边缘，别糊住头像
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+      const edge = (g, sign) => {
+        const tx = ux ? Math.abs((g.w / 2 + 10) / ux) : Infinity;
+        const ty = uy ? Math.abs((g.h / 2 + 10) / uy) : Infinity;
+        const t = Math.min(tx, ty, len / 2);
+        return { x: g.x + sign * ux * t, y: g.y + sign * uy * t };
+      };
+      return { from: edge(a, 1), to: edge(b, -1), len: len };
+    };
+    const curve = (p1, p2, bend) => {
+      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+      const dx = p2.x - p1.x, dy = p2.y - p1.y, nl = Math.hypot(dx, dy) || 1;
+      return `M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} Q ${(mx + (-dy / nl) * bend).toFixed(1)} ${(my + (dx / nl) * bend).toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    };
+    const fly = (icon, d, delay, opt) => {
+      const el = document.createElement('span');
+      el.className = 'fly' + (opt && opt.back ? ' back' : '');
+      el.textContent = icon;
+      el.style.offsetPath = `path('${d}')`;
+      el.style.animationDelay = `${delay}ms, ${delay + 550}ms`;      // 飞行 550ms，再淡出
+      fx.appendChild(el);
+    };
+    const shield = (g, delay, kind) => {
+      const el = document.createElement('span');
+      el.className = 'shield ' + kind;
+      el.textContent = '🛡️';
+      el.style.left = g.x.toFixed(1) + 'px';
+      el.style.top = g.y.toFixed(1) + 'px';
+      el.style.animationDelay = `${delay}ms, ${delay + 1500}ms`;
+      fx.appendChild(el);
+    };
+
+    // 记下"谁朝我飞了什么"，反盾弹回时按原样飞回去
+    const incomingIcon = {};
+    tl.beats.forEach(b => b.hits.forEach(h => {
+      const n = (b.rep.alloc && b.rep.alloc[h.item] && b.rep.alloc[h.item][h.to]) || 1;
+      (incomingIcon[h.to] = incomingIcon[h.to] || []).push(projFor(h.item, n).icon);
+    }));
+
+    tl.beats.forEach(b => {
+      const gFrom = geo(b.rep.id);
+      if (!gFrom) return;
+      b.hits.forEach(h => {
+        const gTo = geo(h.to);
+        if (!gTo) return;
+        const e = ends(gFrom, gTo);
+        const n = (b.rep.alloc && b.rep.alloc[h.item] && b.rep.alloc[h.item][h.to]) || 1;
+        const pr = projFor(h.item, n);
+        const repTo = res.reports.find(r => r.id === h.to) || {};
+        const blocked = repTo.gross > 0 && !(repTo.damage > 0) && !(repTo.reverse && repTo.reverse.success);
+        for (let k = 0; k < pr.count; k++) {
+          const spread = (k - (pr.count - 1) / 2) * 9;
+          fly(pr.icon, curve({ x: e.from.x + spread, y: e.from.y }, { x: e.to.x + spread, y: e.to.y }, 16 + k * 5),
+            b.t + k * 45, {});
+        }
+        if (blocked) shield(gTo, Math.max(0, b.impact - 80), 'block');   // 被防具挡下：顶出个盾
+      });
+      if (b.back.length) {                        // 反盾：盾牌一顶，飞来的刀子原样弹回去
+        b.back.forEach(aid => {
+          const gTo = geo(aid);
+          if (!gTo) return;
+          const e = ends(gFrom, gTo);
+          (incomingIcon[b.rep.id] || ['🗡️']).slice(0, 3).forEach((ic, k) => {
+            fly(ic, curve({ x: e.from.x + k * 8, y: e.from.y }, { x: e.to.x + k * 8, y: e.to.y }, 18 + k * 5),
+              b.t + 340 + k * 70, { back: true });
+          });
+        });
+        shield(gFrom, b.t + 60, 'rev');
+      }
+      if (b.steal.length) {                       // 偷：一只手飘过去
+        b.steal.forEach((s, k) => {
+          const gTo = geo(s.id);
+          if (!gTo) return;
+          const e = ends(gFrom, gTo);
+          fly('🫳', curve(e.from, e.to, 14 + k * 5), b.t + k * 60, {});
+        });
+      }
+    });
+    wrap.appendChild(fx);
+  }
+
+  /** 这一回合谁打了他（画连线 + 卡片上写明细都用它），带"什么时候打到的" */
+  function incomingOf(id, tl) {
+    if (!tl) return [];
     const out = [];
-    res.reports.forEach(r => (r.hits || []).forEach(h => {
+    tl.beats.forEach(b => b.hits.forEach(h => {
       if (h.to !== id) return;
-      out.push({ from: r.name, itemName: B.ITEMS[h.item] ? B.ITEMS[h.item].name : h.item, dmg: h.dmg });
+      out.push({
+        from: b.rep.name,
+        itemName: B.ITEMS[h.item] ? B.ITEMS[h.item].name : h.item,
+        dmg: h.dmg, t: b.impact
+      });
     }));
     return out;
   }
@@ -1726,8 +2069,8 @@ const VIEW = (function () {
     if (!wrap) return;
     const old = wrap.querySelector('svg.arrows');
     if (old) old.remove();
-    const pub = app.pub, res = pub && pub.lastResult;
-    if (!pub || pub.phase !== 'reveal' || !res) return;
+    const pub = app.pub, res = pub && pub.lastResult, tl = app._tl;
+    if (!pub || pub.phase !== 'reveal' || !res || !tl) return;
     const box = wrap.getBoundingClientRect();
     if (!box.width || !box.height) return;            // 没有布局信息（或 jsdom）就不画
 
@@ -1775,13 +2118,12 @@ const VIEW = (function () {
     };
 
     const arcs = [];
-    res.reports.forEach((rep, i) => {
-      (rep.hits || []).forEach(h => arcs.push({ from: rep.id, to: h.to, kind: h.item === 'cibao' ? 'smite' : 'hit' }));
-      (rep.reverseBack || []).forEach(a => arcs.push({ from: rep.id, to: a, kind: 'back' }));
-      (rep.stolenFrom || []).forEach(s => arcs.push({ from: rep.id, to: s.id, kind: 'steal' }));
+    tl.beats.forEach(b => {
+      b.hits.forEach(h => arcs.push({ from: b.rep.id, to: h.to, kind: h.item === 'cibao' ? 'smite' : 'hit', at: b.t }));
+      b.back.forEach(id => arcs.push({ from: b.rep.id, to: id, kind: 'back', at: b.t + 120 }));
+      b.steal.forEach(s => arcs.push({ from: b.rep.id, to: s.id, kind: 'steal', at: b.t + 60 }));
     });
 
-    const step = app.revealStep || 200;
     arcs.forEach(a => {
       const g1 = geo(a.from), g2 = geo(a.to);
       if (!g1 || !g2) return;
@@ -1789,19 +2131,23 @@ const VIEW = (function () {
       const mx = (t.from.x + t.to.x) / 2, my = (t.from.y + t.to.y) / 2;
       const nx = -(t.to.y - t.from.y), ny = t.to.x - t.from.x;   // 垂直方向，让线稍微弯一点
       const nl = Math.hypot(nx, ny) || 1;
-      const bend = Math.min(26, t.len * 0.16);
+      const bend = Math.min(30, t.len * 0.16);
       const cx = mx + (nx / nl) * bend, cy = my + (ny / nl) * bend;
       const path = document.createElementNS(NS, 'path');
       path.setAttribute('d', `M ${t.from.x.toFixed(1)} ${t.from.y.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${t.to.x.toFixed(1)} ${t.to.y.toFixed(1)}`);
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', ARROW_COLORS[a.kind]);
-      path.setAttribute('stroke-width', a.kind === 'steal' ? '2' : '2.6');
-      path.setAttribute('opacity', a.kind === 'steal' ? '0.85' : '0.95');
+      path.setAttribute('stroke-width', a.kind === 'steal' ? '2.4' : '3.4');
+      path.setAttribute('opacity', '0.95');
       path.setAttribute('marker-end', `url(#ah-${a.kind})`);
       path.setAttribute('stroke-dasharray', t.len.toFixed(0));
       path.setAttribute('stroke-dashoffset', t.len.toFixed(0));
-      const idx = res.reports.findIndex(r => r.id === a.from);
-      path.style.animationDelay = (Math.max(0, idx) * step + 150) + 'ms';
+      // 先"画"出来，停一会儿，再淡出——避免一屏全是线
+      path.style.animationName = 'draw-arrow, arrow-fade';
+      path.style.animationDuration = '.48s, .35s';
+      path.style.animationTimingFunction = 'ease-out, ease-in';
+      path.style.animationFillMode = 'both, forwards';
+      path.style.animationDelay = `${a.at}ms, ${a.at + 1400}ms`;
       svg.appendChild(path);
     });
     wrap.appendChild(svg);
@@ -1818,9 +2164,19 @@ const VIEW = (function () {
         ? `${label} → ${hits.map(h => `${nameOf(h.to)} −${fmtNum(h.dmg)}`).join('、')}`
         : B.describePicks(app.pub, { items: r.items, alloc: r.alloc, steal: r.steal });
       const died = r.events.some(e => /阵亡|暴毙/.test(e));
+      // "谁+谁=总共多少 − 防御 = 掉多少"，把求和这件事写明白
+      let sum = '';
+      if (r.gross > 0) {
+        const who = [];
+        res.reports.forEach(o => (o.hits || []).forEach(h => { if (h.to === r.id) who.push(`${o.name} ${fmtNum(h.dmg)}`); }));
+        sum = `<div class="tiny ${r.damage > 0 ? 'err' : 'muted'}">🧮 ${esc(who.join(' + ') || '挨打')} = ${fmtNum(r.gross)} 点 − 防御 ${fmtNum(r.def)}${r.defAttack ? `（含刀自带 ${fmtNum(r.defAttack)}）` : ''} = ${r.damage > 0 ? '掉 ' + fmtNum(r.damage) + ' 点' : '全部挡下'}</div>`;
+      }
+      const cost = (r.cost != null && r.cost > 0) ? `<div class="tiny muted">💸 消耗 ${fmtNum(r.cost)} 点</div>` : '';
       return `<li class="res ${died ? 'died' : ''}">
         <div><b>${esc(p ? p.name : r.name)}</b> ${esc(head)}</div>
+        ${cost}
         ${r.events.map(e => `<div class="tiny ${/阵亡|暴毙/.test(e) ? 'err' : 'muted'}">${esc(e)}</div>`).join('')}
+        ${sum}
       </li>`;
     }).join('')}</ul>`;
   }
@@ -1992,24 +2348,31 @@ const VIEW = (function () {
   function rulesHtml() {
     return `<div class="doc">
       <h4>核心</h4>
-      <p>每回合所有人同时出招，倒计时结束后统一结算：<b>受到的伤害 = 外面所有人打你的总攻击 − 你的防御</b>。</p>
+      <p>每回合所有人同时出招，倒计时结束后统一结算：<b>受到的伤害 = 外面所有人打你的总攻击之和 − 你的防御</b>。
+         注意是<b>求和</b>：三个人各打你 1 点就是挨 3 点，不是只算最大的那一个。</p>
+      <p><b>你的防御 = 防御道具的防御 + 你攻击自带的防御</b>。你出攻击 x 点，本回合就自带 x 点防御——
+         所以两个人互砍一刀，双方各自自带 1 点防御，都活得下来，不会同归于尽。</p>
       <p>血量初始为 <b>0</b>，下限为 0。<b>只要 血量 − 伤害 &lt; 0 就死</b> —— 0 血的人挨 1 点伤害就死，<code>合掌</code> 加的血就是多一层缓冲。</p>
       <p>攻击、防御、反盾都在回合末结算、下回合清零；血量、点数、赠品留到下一回合。</p>
-      <p><b>时间到了还没锁定，就自动按「集」结算</b>（白拿 1 点，但别指望集能保命）。</p>
+      <p><b>时间到了还没锁定，就自动按「集」结算</b>（白拿 1 点，但集不自带任何防御，等于原地挨打）。</p>
 
       <h4>一回合只能挑一种道具</h4>
       <p>每回合你只能从道具里挑 <b>一种</b>：要么「集」赚点，要么出刀，要么上防，要么反盾，要么特殊道具。
          所以「集完顺手砍一刀」「边防边反」这类组合不存在，5 秒决策就是赌这一手。</p>
       <p><b>不可叠</b>：除了下面列出的可叠道具，其余道具对<b>同一个人一回合只能用一次</b>。
-         想同时打多个人？买 N 把同种刀砍 N 个人——一人一刀，不能一人三刀。</p>
-      <p><b>可叠</b>：精血（原规则写明「可叠加」）、彩虹斩（房主开了叠加包后 n 倍）、偷（「不论使用数量」），
-         以及同属赠品的剑气 / 天雷 / 肥美。可叠道具分给多个人时<b>必须完全均分</b>，不能一个人 3 个、另一个 2 个。</p>
+         想同时打多个人？买 N 把同种刀砍 N 个人——一人一刀，不能一人三刀。
+         肥美 / 剑气 / 天雷 也在不可叠之列：一人一回合只能吃 1 个。</p>
+      <p><b>可叠</b>（只有原规则明确写过的这三样）：精血「可叠加」、彩虹斩（房主开了叠加包后 n 倍）、偷「不论使用数量」。
+         可叠道具分给多个人时<b>必须完全均分</b>，不能一个人 3 个、另一个 2 个。</p>
+      <p><b>叠肥是独立道具</b>：它不是"把肥美叠起来用"，而是<b>吃掉 3 个肥美、造成 2-ε 伤害</b>的一个专门道具
+         （同样不可叠，打一个人就要吃 3 个）。</p>
 
       <h4>点数</h4>
       <p>初始 0 点，不会自动增长，只能靠「集」赚。因为一回合只能出一种道具，集点只能留到下回合花。</p>
 
       <h4>攻击</h4>
-      <p>一刀 1 / 双刀 2 / 上吊 3 / 四刀 4 / 五刀 5 / 彩虹斩 8。点对手头像选目标，买 N 把同种刀就能选 N 个人，旁边有「全选」。</p>
+      <p>一刀 1 / 双刀 2 / 上吊 3 / 四刀 4 / 五刀 5 / 彩虹斩 8。点对手头像选目标，买 N 把同种刀就能选 N 个人，旁边有「全选」。
+         <b>攻击多少点，本回合就自带多少点防御</b>（五刀＝自带 5 防，彩虹斩＝自带 8 防）。</p>
       <p><b>彩虹斩</b>：命中即死，无视血量和自守；但会被防具挡下（算出来 ≤ 0 就无效）。没开叠加包时一回合只能 1 个。</p>
       <p><b>赠品</b>（回合末发放、自动进背包、可跨回合累积，要自己选用）：上吊送 1 精血（0.5 伤害）、四刀送 1 剑气（1 伤害）、
          五刀送 1 天雷（3 伤害，<b>在小防面前只有 2 伤害</b>）、不死送 1 肥美（0.5 伤害）。叠肥＝吃掉 3 个肥美造成 2-ε 伤害
@@ -2018,6 +2381,7 @@ const VIEW = (function () {
 
       <h4>防御</h4>
       <p>不死 1（免费）/ 小防 2（免费）/ 大防 3（1 点）/ 磁盾 5（2 点，会被磁暴劈）/ 黑洞 8（4 点）/ 白洞 ∞（6 点）。一回合只能上一个。</p>
+      <p>如果你这一回合选择出刀，那么你的防御就是"刀自带的那些"，再上不了防具——攻防只能选一样。</p>
 
       <h4>反盾</h4>
       <p>像一个弹簧：外面打你的总攻击 <b>≤ 弹性范围</b> → 反盾成功，<b>无视血量杀死所有攻击你的人</b>（他们的防御也救不了）；
@@ -2025,10 +2389,12 @@ const VIEW = (function () {
          小反 2（1 点）/ 大反 4（2 点）/ 超反 6.5（3 点），一回合只能上一个。</p>
 
       <h4>偷（0 点）</h4>
-      <p>用「偷」的回合防御固定为 0.5。指定若干对象：</p>
-      <p>· 对象在「集」→ 偷走他<b>全部点数</b>（含刚集的）<br>
-         · 对象出防 / 反盾 / 自守 / 合掌 → <b>你当场暴毙</b><br>
+      <p>用「偷」的回合防御固定为 0.5。指定若干对象后，<b>逐个对象各自独立结算</b>：</p>
+      <p>· 对象在「集」→ <b>偷走他全部点数</b>（含刚集的那一点）。<b>不管其他对象出什么，这一步都会发生</b><br>
+         · 对象出防 / 反盾 / 自守 / 合掌 → <b>你当场暴毙</b>（只要对象里有一个人这样，你必死）<br>
          · 对象在做别的事 → 无事发生</p>
+      <p>举例：同时偷 A、B、C —— A 出「集」→ A 的点数照偷不误；只要 B、C 里有一个人出了防，你偷完照样暴毙，
+         偷来的点数也跟着你一起清空。</p>
       <p>偷得准不准，看房主的<b>点数公开</b>开关：关（默认）时出招阶段看不到别人的点数与背包，等于盲偷；
          开了就是明牌局，谁钱多一目了然。</p>
 
@@ -2044,9 +2410,9 @@ const VIEW = (function () {
       <p>房间里<b>所有玩家（含房主）都要点「准备好了」</b>房主才能开始；再来一局要回房间重新确认一遍。</p>
 
       <h4>房主开关</h4>
-      <p>· <b>选择 / 展示时间</b>：默认 5 秒 / 3 秒。<br>
+      <p>· <b>选择 / 展示时间</b>：默认 5 秒 / 5 秒。展示给得长一点，是为了把结算动画看清楚。<br>
          · <b>全员锁定后立刻结算</b>：默认开，都锁好了就不用干等。<br>
-         · <b>点数公开</b>：默认关（出招阶段别人的点数与背包显示为 ?，防反推）；开了是明牌局。<br>
+         · <b>点数公开</b>：默认关（别人的点数与背包显示为 ?，防反推）；开了是明牌局。<br>
          · <b>血量拓展 / 彩虹斩叠加 / 自守拓展</b>：默认全关，按需开启。</p>
 
       <h4>本实现补充说明</h4>
@@ -2102,9 +2468,13 @@ const VIEW = (function () {
       list.splice(i, 1);
     } else {
       if (list.length >= maxTargets(id)) {
-        toast(id === 'caihong' && !packOn('rainbow')
-          ? '彩虹斩没开叠加包时一回合只能斩 1 个人'
-          : '没有更多可打的人了');
+        const dit = B.ITEMS[id];
+        if (id === 'caihong' && !packOn('rainbow')) toast('彩虹斩没开叠加包时一回合只能斩 1 个人');
+        else if (dit.giftOnly) toast(`「${dit.name}」只剩 ${mePlayer().bag[id] || 0} 个，一人只能吃 1 个`);
+        else if (dit.consume) {
+          const need = Object.keys(dit.consume).map(k => `${dit.consume[k]} 个${B.ITEMS[k].name}`).join('、');
+          toast(`材料不够：打一个人要 ${need}`);
+        } else toast('没有更多可打的人了');
         return;
       }
       const unit = B.unitCost(app.pub, mePlayer(), id);
@@ -2425,7 +2795,7 @@ const ROOM = (function () {
         if (state.players.length >= 12) { try { conn.send({ t: 'err', msg: '房间满了（最多 12 人）' }); } catch (e) { /* 忽略 */ } return; }
         const p = B.addPlayer(state, id, String(data.name || '玩家').slice(0, 8) || '玩家');
         p.connected = true;
-        state.log.push(`${p.name} 加入了房间`);
+        state.log.push({ k: 'text', s: `${p.name} 加入了房间` });
       }
       try { conn.send({ t: 'welcome', code: code, id: id, you: id }); } catch (e) { /* 忽略 */ }
       broadcast(true);
@@ -2489,7 +2859,7 @@ const ROOM = (function () {
         const link = conns.find(c => c.conn === conn);
         if (link && link.id) {
           const p = B.getPlayer(state, link.id);
-          if (p) { p.connected = false; p.submitted = true; state.log.push(`${p.name} 掉线了`); }
+          if (p) { p.connected = false; p.submitted = true; state.log.push({ k: 'text', s: `${p.name} 掉线了` }); }
           broadcast(true);
         }
         conns = conns.filter(c => c.conn !== conn);
@@ -2621,7 +2991,7 @@ const ROOM = (function () {
     const names = ['刀客', '阿飞', '老六', '铁憨憨', '小刀', '摸鱼王', '夜行者', '大聪明'];
     const p = B.addPlayer(state, 'bot' + Date.now() + n, names[(n - 1) % names.length] + (n > names.length ? n : ''), { isBot: true });
     p.ready = true;                      // 电脑永远算准备好了，不挡开局
-    state.log.push(`${p.name}（电脑）加入了房间`);
+    state.log.push({ k: 'text', s: `${p.name}（电脑）加入了房间` });
     broadcast(true);
   }
 
@@ -2635,7 +3005,7 @@ const ROOM = (function () {
       try { link.conn.send({ t: 'err', msg: '你被房主移出了房间' }); link.conn.close(); } catch (e) { /* 忽略 */ }
       conns = conns.filter(c => c !== link);
     }
-    state.log.push(`${p.name} 被移出房间`);
+    state.log.push({ k: 'text', s: `${p.name} 被移出房间` });
     broadcast(true);
   }
 
