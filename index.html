@@ -633,8 +633,8 @@ const BADAO = (function () {
       desc: '不死的赠品。伤害 0.5。' },
     { id: 'diefei', name: '叠肥', cost: 0, kind: 'attack', atk: FEI_ATK, icon: '🥩', consume: { feimei: 3 },
       desc: '独立道具，不是"叠肥美"：吃掉 3 个肥美，造成 2-ε 伤害。不可叠，打一个人就要吃 3 个。' },
-    { id: 'cibao', name: '磁暴', cost: 2, kind: 'smite', smiteOn: ['cidun'], icon: '🧲',
-      desc: '目标若出磁盾，立刻暴毙；否则无事发生。无伤害。' },
+    { id: 'cibao', name: '磁暴', cost: 1, kind: 'smite', smiteOn: ['cidun'], icon: '🧲',
+      desc: '1 点。目标若出磁盾，立刻暴毙；否则无事发生。无伤害。' },
     { id: 'fandao', name: '反刀', cost: 1, kind: 'attack', atk: 0.5, pierceReverse: true, icon: '🤺',
       desc: '伤害 0.5，消耗 1 点。打到反盾上时：对方反盾「完全破盾」——整回合谁的刀都弹不回来，并且无视他的血量直接斩杀。' },
 
@@ -810,6 +810,10 @@ const BADAO = (function () {
     if (chosen.length > 1) {
       errors.push('一回合只能挑一种道具，你同时选了 ' +
         chosen.map(id => `「${ITEMS[id] ? ITEMS[id].name : id}」`).join('、'));
+    }
+    // 没有"空手"这个选项：什么都不想做也要出张「集」（+1 点，也免得被别人偷空）
+    if (!chosen.length) {
+      errors.push('不能空手出招：最少出一张「集」攒 1 点（什么都不出就等超时，系统也会替你出「集」）');
     }
 
     chosen.forEach(id => {
@@ -1404,7 +1408,7 @@ const BADAO = (function () {
       if (ITEMS[a].cost * targets.length <= p.points) add(12 + ITEMS[a].cost * 3, a, targets.length, targets);
     });
     if (state.settings.packs.rainbow && p.points >= 8) add(10, 'caihong', 1, aim(1));
-    if (p.points >= 2 && rng() < 0.25) add(8, 'cibao', 1, aim(1));      // 赌一把人家上磁盾
+    if (p.points >= 1 && rng() < 0.25) add(8, 'cibao', 1, aim(1));      // 赌一把人家上磁盾
     if (state.settings.packs.self && p.points >= 2) add(8, 'du', 1, aim(1));
     if (state.settings.packs.hp && p.points >= 1) add(8, 'podun', 1, aim(1));
 
@@ -1680,10 +1684,7 @@ const VIEW = (function () {
     const sel = (draft.sel[id] || []).filter(t => ids.indexOf(t) >= 0);
     if (sel.length) draft.sel[id] = sel; else delete draft.sel[id];
     draft.steal = draft.steal.filter(t => ids.indexOf(t) >= 0);
-    if (B.ITEMS[id].kind === 'steal' && !draft.steal.length) {
-      const f = foes();
-      if (f.length) draft.steal = [f[0].id];
-    }
+    // 这里**不**再自动补一个目标：谁是目标必须由玩家自己点，选了 0 个人就交给校验去提示
   }
 
   const selOf = id => (draft.sel[id] || []).filter(t => foes().some(f => f.id === t));
@@ -1739,7 +1740,13 @@ const VIEW = (function () {
     }
     return out;
   }
-  const myCost = () => B.totalCost(app.pub, mePlayer(), draftAction().items);
+  const myCost = () => {
+    // 攻击类道具在"还没选目标"时，草稿里会塞一个占位 1（好让校验报出"还没选目标"）。
+    // 但界面上"本回合花多少点"要按真实目标数算，否则一个人都没点就说花掉了 1 点。
+    const id = draft.chosen;
+    if (id && isAim(id) && !selOf(id).length) return 0;
+    return B.totalCost(app.pub, mePlayer(), draftAction().items);
+  };
 
   /** 本回合出招的人话描述 */
   function describeDraft() {
@@ -2040,7 +2047,7 @@ const VIEW = (function () {
           <b>本回合出招</b>
           <button class="btn sm ghost" data-act="clear">清空</button>
         </div>
-        <div class="small" style="margin-top:6px">${esc(describeDraft()) || '还没挑道具——点上面任意一张卡片，再点头像选目标。'}</div>
+        <div class="small" style="margin-top:6px">${esc(describeDraft()) || '还没挑道具——点上面任意一张卡片，再点头像选目标。<b>不能空手</b>：什么都不想干就出「集」。'}</div>
         <div class="small" style="margin-top:4px">
           本回合花 <b>${fmtNum(myCost())}</b> 点 / 手上 <b>${fmtNum(usablePoints())}</b> 点
           ${myCost() > usablePoints() ? '<span class="badge red">点数不够</span>' : ''}
@@ -2958,8 +2965,6 @@ const VIEW = (function () {
     let ctrl = '';
     if (isAim(it.id)) {
       const targets = selOf(it.id);
-      const act = draftAction();
-      const n = act.items[it.id] || 0;
       if (isStack(it.id)) {
         const m = Math.max(1, targets.length);
         const cap = maxCount(it.id);
@@ -2974,8 +2979,12 @@ const VIEW = (function () {
           <span class="tiny muted">${chosen ? `每人 ${per} 个 · 共 ${per * m} 个` : '可叠（要均分）'}</span>
         </div>`;
       } else {
+        // 数量就是"点了几个头像"，没点时别装作买了 1 个（草稿里那个 1 只是为了让校验去报"还没选目标"）
+        const picks = targets.length;
+        const badge = !chosen ? 'grey' : (picks ? 'blue' : 'grey');
         ctrl = `<div class="ctrl">
-          <span class="badge ${chosen ? 'blue' : 'grey'}">${chosen ? `${n} 个 · 花 ${fmtNum(cost * n)} 点` : '不可叠：一人只吃 1 个'}</span>
+          <span class="badge ${badge}">${!chosen ? '不可叠：一人只吃 1 个'
+            : (picks ? `${picks} 个 · 花 ${fmtNum(cost * picks)} 点` : '还没选人：点下面的头像')}</span>
         </div>`;
       }
     } else {
@@ -3065,7 +3074,8 @@ const VIEW = (function () {
          所以两个人互砍一刀，双方各自自带 1 点防御，都活得下来，不会同归于尽。</p>
       <p>血量初始为 <b>0</b>，下限为 0。<b>只要 血量 − 伤害 &lt; 0 就死</b> —— 0 血的人挨 1 点伤害就死，<code>合掌</code> 加的血就是多一层缓冲。</p>
       <p>攻击、防御、反盾都在回合末结算、下回合清零；血量、点数、赠品留到下一回合。</p>
-      <p><b>时间到了还没锁定，就自动按「集」结算</b>（白拿 1 点，但集不自带任何防御，等于原地挨打）。</p>
+      <p><b>没有"空手"这个选项</b>：每回合至少得出一样东西，什么都不想干就出「集」（白拿 1 点）。<br>
+         <b>时间到了还没锁定，就自动按「集」结算</b>（白拿 1 点，但集不自带任何防御，等于原地挨打）。</p>
 
       <h4>一回合只能挑一种道具</h4>
       <p>每回合你只能从道具里挑 <b>一种</b>：要么「集」赚点，要么出刀，要么上防，要么反盾，要么特殊道具。
@@ -3083,6 +3093,7 @@ const VIEW = (function () {
 
       <h4>攻击</h4>
       <p>一刀 1 / 双刀 2 / 上吊 3 / 四刀 4 / 五刀 5 / 彩虹斩 8。点对手头像选目标，买 N 把同种刀就能选 N 个人，旁边有「全选」。
+         <b>不会替你预选目标</b>：点谁打谁；点错了再点一下头像就取消，最后一个也能取消。
          <b>攻击多少点，本回合就自带多少点防御</b>（五刀＝自带 5 防，彩虹斩＝自带 8 防）。</p>
       <p><b>反刀</b>（1 点）：伤害只有 0.5，但打到<b>反盾</b>上时——对方反盾<b>完全破盾</b>
          （整回合谁的刀都弹不回来），并且<b>无视他的血量</b>直接斩杀。专治反盾。</p>
@@ -3090,7 +3101,7 @@ const VIEW = (function () {
       <p><b>赠品</b>（回合末发放、自动进背包、可跨回合累积，要自己选用）：上吊送 1 精血（0.5 伤害）、四刀送 1 剑气（1 伤害）、
          五刀送 1 天雷（3 伤害，<b>在小防面前只有 2 伤害</b>）、不死送 1 肥美（0.5 伤害）。叠肥＝吃掉 3 个肥美造成 2-ε 伤害
          （所以 2 血的人能剩一丝血站住，也破不了小反的 2 点弹性）。</p>
-      <p><b>磁暴</b>（2 点）：目标本回合若出磁盾，立刻暴毙；没出就无事发生。</p>
+      <p><b>磁暴</b>（1 点）：目标本回合若出磁盾，立刻暴毙；没出就无事发生。</p>
 
       <h4>防御</h4>
       <p>不死 1（免费）/ 小防 2（免费）/ 大防 3（1 点）/ 磁盾 5（2 点，会被磁暴劈）/ 黑洞 8（4 点）/ 白洞 ∞（6 点）。一回合只能上一个。</p>
@@ -3152,32 +3163,22 @@ const VIEW = (function () {
     if (draft.chosen === id) { clearDraft(); app.err = ''; render(); return; }
     const it = B.ITEMS[id];
     if (itemLocked(it)) { toast(`「${it.name}」现在不能用`); return; }
+    // 刻意**不**预选目标：以前会默认选中"第一个人"，于是"只有 1 点、想砍第二个人"时
+    // 加不上人（点数不够）、也去不掉人（至少留一个），直接卡死。
+    // 现在点谁就是谁，谁都没点就由校验提示"还没选目标"。
     draft = { chosen: id, count: 1, sel: {}, steal: [] };
-    if (isAim(id) || it.kind === 'steal') {
-      const f = foes();
-      if (f.length) {
-        if (it.kind === 'steal') draft.steal = [f[0].id];
-        else draft.sel[id] = [f[0].id];
-      }
-    }
-    if (isStack(id)) draft.count = Math.max(1, (draft.sel[id] || []).length);
     app.err = '';
     render();
   }
 
-  /** 点头像多选目标（偷是"选中/取消"，攻击类是"加/减一个人"） */
+  /** 点头像多选目标（偷是"选中/取消"，攻击类是"加/减一个人"）；最后一个也能取消掉 */
   function toggleTarget(id, tid) {
     if (!canAct() || draft.chosen !== id) { toast('先点这张卡片「选用」再选人'); return; }
     const it = B.ITEMS[id];
     if (it.kind === 'steal') {
-      // 之前这里只走"添加"分支，导致同一个人能被塞进去很多次、而且取消不掉
       const i = draft.steal.indexOf(tid);
-      if (i >= 0) {
-        if (draft.steal.length <= 1) { toast('至少留一个目标（想取消整个道具就再点一次卡片）'); return; }
-        draft.steal.splice(i, 1);
-      } else {
-        draft.steal.push(tid);
-      }
+      if (i >= 0) draft.steal.splice(i, 1);
+      else draft.steal.push(tid);
       app.err = '';
       render();
       return;
@@ -3186,8 +3187,7 @@ const VIEW = (function () {
     const list = draft.sel[id] || (draft.sel[id] = []);
     const i = list.indexOf(tid);
     if (i >= 0) {
-      if (list.length <= 1) { toast('至少留一个目标'); return; }
-      list.splice(i, 1);
+      list.splice(i, 1);                 // 取消最后一个也允许：不然"想换个人打"就卡死了
     } else {
       if (list.length >= maxTargets(id)) {
         const dit = B.ITEMS[id];
@@ -3199,9 +3199,12 @@ const VIEW = (function () {
         } else toast('没有更多可打的人了');
         return;
       }
+      // 预算检查要按"再加一个人之后一共几个目标"来算：
+      // 草稿在没选目标时会塞一个占位 1（好让校验报"还没选目标"），
+      // 直接拿 myCost() 来比就会把占位也算成一把刀，于是"1 点却一个目标都点不上"。
       const unit = B.unitCost(app.pub, mePlayer(), id);
-      if (!isStack(id) && myCost() + unit > usablePoints()) {
-        app.err = `点数不够：再打一个人要多花 ${fmtNum(unit)} 点，你手上只有 ${fmtNum(usablePoints())} 点`;
+      if (!isStack(id) && (list.length + 1) * unit > usablePoints()) {
+        app.err = `点数不够：再打一个人要多花 ${fmtNum(unit)} 点，你手上只有 ${fmtNum(usablePoints())} 点（点一下已选的人可以取消）`;
         toast('点数不够，先点掉一个目标或去「集」');
         render();
         return;
@@ -3304,12 +3307,14 @@ const VIEW = (function () {
         case 'ready': ROOM.setReady(!(mePlayer() && mePlayer().ready)); break;
         case 'tab': tab = btn.getAttribute('data-tab'); render(); break;
         case 'clear': {
-          // 只清空草稿；如果你本来已经锁定过，才顺手把"空手"这个决定提交上去
+          // 不能出空手了：清空草稿的同时要把已提交的旧招一起撤掉，
+          // 否则界面显示"没挑道具"、服务器那头却还锁着上一手，那就是骗人。
           const was = mePlayer() && mePlayer().submitted;
           clearDraft();
           app.err = '';
-          if (was) ROOM.submit({ items: {}, alloc: {}, steal: [] });
+          if (was) ROOM.unlock();
           render();
+          toast(was ? '已撤销锁定 + 清空：不能出空手，挑一张牌再锁' : '已清空：不能出空手，挑一张牌再锁');
           break;
         }
         case 'submit': doSubmit(); break;
@@ -3376,9 +3381,7 @@ const VIEW = (function () {
       render();
       return;
     }
-    // 空手也能锁：有时候你就是什么都不想做（比如怕被偷）。但得提醒一下兜底规则
-    if (!draft.chosen) toast('空手锁定：本回合什么也不做（不锁定的话，超时会自动帮你出「集」）');
-    else toast('已锁定，时间到之前还能改');
+    toast('已锁定，时间到之前还能改');
     app.err = '';
     ROOM.submit(B.normalize(app.pub, app.me, action));
     render();
@@ -3582,6 +3585,14 @@ const ROOM = (function () {
     if (data.t === 'ready') {
       const p = B.getPlayer(state, id);
       if (p && state.phase === 'lobby') { p.ready = !!data.ready; broadcast(true); }
+    }
+    if (data.t === 'unlock') {
+      const p = B.getPlayer(state, id);
+      if (p && p.alive && state.phase === 'select') {
+        p.picks = B.emptyPicks();
+        p.submitted = false;
+        broadcast(true);
+      }
     }
   }
 
@@ -3827,6 +3838,21 @@ const ROOM = (function () {
     }
   }
 
+  /** 撤销锁定（「清空」时用：既然不能出空手，就别让服务器以为你还锁着旧招） */
+  function unlock() {
+    if (!state && !isHost && !myConn) return;
+    if (isHost) {
+      if (!state || state.phase !== 'select') return;
+      const p = B.getPlayer(state, myId);
+      if (!p || !p.alive) return;
+      p.picks = B.emptyPicks();
+      p.submitted = false;
+      broadcast(true);
+    } else if (myConn && myConn.open) {
+      myConn.send({ t: 'unlock' });
+    }
+  }
+
   function leave() {
     try { if (myConn) myConn.close(); } catch (e) { /* 忽略 */ }
     try { if (peer) peer.destroy(); } catch (e) { /* 忽略 */ }
@@ -3841,7 +3867,7 @@ const ROOM = (function () {
 
   return {
     create: create, join: join, start: start, addBot: addBot, kick: kick,
-    setSetting: setSetting, rematch: rematch, submit: submit, leave: leave, setReady: setReady,
+    setSetting: setSetting, rematch: rematch, submit: submit, unlock: unlock, leave: leave, setReady: setReady,
     isHost: () => isHost, code: () => code, myId: () => myId
   };
 })();
