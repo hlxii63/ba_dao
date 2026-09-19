@@ -439,6 +439,88 @@ svg.arrows path { animation: draw-arrow .5s ease-out both; }
 @media (prefers-reduced-motion: reduce) {
   .fx { display: none; }               /* 关掉动效时只留连线，别让道具堆在角落里 */
 }
+
+/* ------------------------ 防御 / 盾：每种一个明显不同的特效（空放也亮） */
+.dfx {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  animation: dfx-in .3s ease-out both; pointer-events: none;
+}
+.dfx .ic { font-size: 30px; line-height: 1; }
+.dfx .lb {
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+  padding: 1px 7px; border-radius: 999px;
+  background: rgba(39, 56, 71, .85); color: #fff;
+}
+@keyframes dfx-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dfx-out { to { opacity: 0; transform: translate(-50%, -62%) scale(.9); } }
+
+/* 不死：绿色柔光，轻轻一起一伏 */
+.d-busi .ic { animation: fx-soft 1.4s ease-in-out both; filter: drop-shadow(0 0 7px rgba(16, 185, 129, .95)); }
+@keyframes fx-soft { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+
+/* 小防：蓝色小圆盾，弹出来 */
+.d-xiaofang .ic { animation: fx-pop 1.4s ease-out both; filter: drop-shadow(0 0 7px rgba(59, 130, 246, .95)); }
+@keyframes fx-pop { 0% { transform: scale(.4); opacity: 0; } 45% { transform: scale(1.25); opacity: 1; } 100% { transform: scale(1); } }
+
+/* 大防：更深的蓝、更大，两层光环 */
+.d-dafang .ic { animation: fx-pop2 1.5s ease-out both; font-size: 38px; filter: drop-shadow(0 0 12px rgba(37, 99, 235, 1)); }
+@keyframes fx-pop2 {
+  0% { transform: scale(.4); opacity: 0; }
+  40% { transform: scale(1.35); opacity: 1; }
+  70% { box-shadow: 0 0 0 10px rgba(37, 99, 235, .25); }
+  100% { transform: scale(1); box-shadow: 0 0 0 18px rgba(37, 99, 235, 0); }
+}
+
+/* 磁盾：紫色，边转边振 */
+.d-cidun .ic { animation: fx-spin 1.6s linear both; filter: drop-shadow(0 0 9px rgba(139, 92, 246, 1)); }
+@keyframes fx-spin { 0% { transform: rotate(0) scale(.6); opacity: 0; } 30% { transform: rotate(180deg) scale(1.15); opacity: 1; } 100% { transform: rotate(360deg) scale(1); } }
+
+/* 黑洞：黑紫漩涡，边转边缩小（把攻击吸进去） */
+.d-heidong .ic { animation: fx-vortex 1.6s ease-in-out both; filter: drop-shadow(0 0 12px rgba(76, 29, 149, 1)); }
+@keyframes fx-vortex { 0% { transform: rotate(-90deg) scale(1.5); opacity: 0; } 40% { transform: rotate(0) scale(1); opacity: 1; } 100% { transform: rotate(200deg) scale(.72); } }
+
+/* 白洞：白光炸开，罩住整张卡 */
+.d-baidong .ic { animation: fx-flash 1.5s ease-out both; font-size: 40px; filter: drop-shadow(0 0 18px rgba(255, 255, 255, 1)); }
+@keyframes fx-flash {
+  0% { transform: scale(.3); opacity: 0; }
+  35% { transform: scale(1.6); opacity: 1; box-shadow: 0 0 0 0 rgba(255, 255, 255, .9); }
+  100% { transform: scale(1); box-shadow: 0 0 0 26px rgba(255, 255, 255, 0); }
+}
+
+/* 反盾：橙色回旋镖，来回甩 */
+.d-fan .ic { animation: fx-swipe 1.5s ease-out both; filter: drop-shadow(0 0 10px rgba(245, 158, 11, 1)); }
+@keyframes fx-swipe {
+  0% { transform: rotate(-120deg) scale(.5); opacity: 0; }
+  35% { transform: rotate(20deg) scale(1.25); opacity: 1; }
+  60% { transform: rotate(-15deg) scale(1); }
+  100% { transform: rotate(0) scale(1); }
+}
+
+/* 合掌：金色上浮的光 */
+.d-hezhang .ic { animation: fx-rise 1.5s ease-out both; filter: drop-shadow(0 0 10px rgba(251, 191, 36, 1)); }
+@keyframes fx-rise { 0% { transform: translateY(10px) scale(.6); opacity: 0; } 40% { transform: translateY(-2px) scale(1.2); opacity: 1; } 100% { transform: translateY(-14px) scale(1); opacity: .95; } }
+
+/* 自守：紫色呼吸光环 */
+.d-zishou .ic { animation: fx-breathe 1.8s ease-in-out both; filter: drop-shadow(0 0 10px rgba(139, 92, 246, .95)); }
+@keyframes fx-breathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(139, 92, 246, .45); }
+  50% { transform: scale(1.12); box-shadow: 0 0 0 12px rgba(139, 92, 246, 0); }
+}
+
+/* 被「反刀」完全破盾：抖一下裂开 */
+.dfx.broken .ic { animation: fx-break .7s ease-out both; }
+.dfx.broken .lb { background: var(--red); }
+@keyframes fx-break {
+  0% { transform: scale(1.1) rotate(0); }
+  25% { transform: scale(1.15) rotate(-14deg); filter: grayscale(.4); }
+  55% { transform: scale(.9) rotate(12deg); opacity: .7; }
+  100% { transform: scale(.55) rotate(28deg); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx { display: none; }
+}
 </style>
 </head>
 <body>
@@ -509,6 +591,8 @@ const BADAO = (function () {
       desc: '独立道具，不是"叠肥美"：吃掉 3 个肥美，造成 2-ε 伤害。不可叠，打一个人就要吃 3 个。' },
     { id: 'cibao', name: '磁暴', cost: 2, kind: 'smite', smiteOn: ['cidun'], icon: '🧲',
       desc: '目标若出磁盾，立刻暴毙；否则无事发生。无伤害。' },
+    { id: 'fandao', name: '反刀', cost: 1, kind: 'attack', atk: 0.5, pierceReverse: true, icon: '🤺',
+      desc: '伤害 0.5，消耗 1 点。打到反盾上时：对方反盾「完全破盾」——整回合谁的刀都弹不回来，并且无视他的血量直接斩杀。' },
 
     { id: 'busi', name: '不死', cost: 0, kind: 'defense', def: 1, icon: '💚', gift: { feimei: 1 },
       desc: '防御 1，不耗点数，赠送 1 个肥美。' },
@@ -877,6 +961,7 @@ const BADAO = (function () {
           src.roundData.hits.push({ to: tid, item: id, dmg: dmg });
           const f = flagOf(tid);
           f.attackers[src.id] = (f.attackers[src.id] || 0) + dmg;
+          if (it.pierceReverse) (f.fandaoBy = f.fandaoBy || []).push(src.id);
           if (it.lethal) f.rainbow = true;
           if (it.poison) f.poison = true;
           if (it.shieldBreak) f.podun = true;
@@ -893,6 +978,20 @@ const BADAO = (function () {
       const range = Math.max.apply(null, ranges);   // 反盾不叠加，取最大值
       const g = p.roundData.gross;
       const f = flags[p.id] || { attackers: {} };
+
+      // 反刀专克反盾：只要有人用反刀打他 → 他的反盾**整回合完全失效**（谁的刀都弹不回来），
+      // 同时他自己无视血量被斩杀；反刀本身当然也不会被弹。
+      const fd = (f.fandaoBy || []).filter(aid => getPlayer(state, aid) && getPlayer(state, aid).alive);
+      if (fd.length) {
+        p.roundData.reverse = { range: range, success: null, nullified: true };
+        p.roundData.reverseBack = [];            // 完全破盾：没有任何弹回
+        p.roundData.fandaoKill = true;
+        p.roundData.damage = 0;
+        rd(p.id).events.push('被「反刀」针对 → 反盾完全失效，无视血量当场暴毙');
+        killPlayer(state, p, '被反刀完全破盾（无视反盾与血量）', fd, {});
+        return;
+      }
+
       if (g > EPS && g <= range + EPS) {
         p.roundData.reverse = { range: range, success: true };
         const attackers = Object.keys(f.attackers);
@@ -1030,6 +1129,7 @@ const BADAO = (function () {
       if (rep.reverse) {
         atk.push({
           t: 'reverse', id: rep.id, who: rep.name, ok: !!rep.reverse.success,
+          nullified: !!rep.reverse.nullified,
           gross: rep.gross, range: rep.reverse.range,
           killed: (rep.reverseBack || []).map(x => nameOf(state, x))
         });
@@ -1070,7 +1170,9 @@ const BADAO = (function () {
         case 'reverse':
           out.push(l.ok
             ? `🪃 ${l.who} 反盾成功（${round2(l.gross)} ≤ ${l.range}）→ 弹死 ${l.killed.join('、') || '（无人）'}`
-            : `🪃 ${l.who} 反盾被破（${round2(l.gross)} > ${l.range}）→ 反盾者暴毙`);
+            : (l.nullified
+              ? `🤺 ${l.who} 的反盾被「反刀」完全破掉 → 无视血量当场暴毙（反盾整回合失效，谁的刀都弹不回来）`
+              : `🪃 ${l.who} 反盾被破（${round2(l.gross)} > ${l.range}）→ 反盾者暴毙`));
           break;
         case 'block':
           out.push(`🛡 ${l.who} 防御 ${fmtNum(l.def)}${l.defAttack ? `（含攻击自带 ${fmtNum(l.defAttack)}）` : ''} 挡下 ${round2(l.gross)} 点`);
@@ -1248,6 +1350,7 @@ const BADAO = (function () {
     if (state.settings.packs.self && p.points >= 1 && !p.inDuel && !isDuelTarget(state, p.id) && rng() < 0.12) {
       add(6, 'zishou', 1, []);          // 决斗期间（自己决斗或被决斗）不能开自守
     }
+    if (p.points >= 1) add(6, 'fandao', 1, aim(1));   // 便宜的反盾针对刀，偶尔带上
 
     const o = pickWeighted(cands, rng);
     picks.items[o.id] = o.count;
@@ -1937,6 +2040,27 @@ const VIEW = (function () {
     return { icon: icon, count: Math.max(1, Math.min(5, count)) };
   }
 
+  /* 防御类道具的特效：每种长相、颜色、动作都不一样，空放（没人打你）也要亮一下 */
+  const DEF_FX = {
+    busi: { icon: '💚', cls: 'd-busi', label: '不死 · 防 1' },
+    xiaofang: { icon: '🛡️', cls: 'd-xiaofang', label: '小防 · 防 2' },
+    dafang: { icon: '🛡', cls: 'd-dafang', label: '大防 · 防 3' },
+    cidun: { icon: '🧿', cls: 'd-cidun', label: '磁盾 · 防 5' },
+    heidong: { icon: '🕳️', cls: 'd-heidong', label: '黑洞 · 防 8' },
+    baidong: { icon: '⚪', cls: 'd-baidong', label: '白洞 · 防 ∞' },
+    xiaofan: { icon: '🪃', cls: 'd-fan', label: '小反 · 弹 2' },
+    dafan: { icon: '🪃', cls: 'd-fan', label: '大反 · 弹 4' },
+    chaofan: { icon: '🪃', cls: 'd-fan', label: '超反 · 弹 6.5' },
+    hezhang: { icon: '🙏', cls: 'd-hezhang', label: '合掌 · 血 +1' },
+    zishou: { icon: '🧘', cls: 'd-zishou', label: '自守 · 防 1' }
+  };
+  /** 这个玩家本回合出的防御类道具对应哪套特效 */
+  function defFxOf(rep) {
+    if (!rep || !rep.items) return null;
+    const id = Object.keys(rep.items).find(k => DEF_FX[k]);
+    return id ? DEF_FX[id] : null;
+  }
+
   /** 在玩家格子上放一层"会飞的道具 + 盾牌"，让"谁打谁"变成看得见的动作 */
   function drawFx(tl) {
     const wrap = $('.players');
@@ -1947,6 +2071,7 @@ const VIEW = (function () {
     if (!pub || pub.phase !== 'reveal' || !res || !tl) return;
     // 浏览器不支持沿路径运动（offset-path）就老老实实用连线
     if (typeof CSS === 'undefined' || !CSS.supports || !CSS.supports('offset-path', 'path("M 0 0 L 1 1")')) return;
+    if ((app.remainTotal - app.remainMs) > app.remainTotal * 0.7) return;
     const box = wrap.getBoundingClientRect();
     if (!box.width || !box.height) return;
 
@@ -1983,13 +2108,23 @@ const VIEW = (function () {
       el.style.animationDelay = `${delay}ms, ${delay + 550}ms`;      // 飞行 550ms，再淡出
       fx.appendChild(el);
     };
-    const shield = (g, delay, kind) => {
+    const shield = (g, delay, kind, def) => {
       const el = document.createElement('span');
-      el.className = 'shield ' + kind;
-      el.textContent = '🛡️';
+      el.className = 'shield ' + kind + (def ? ' ' + def.cls : '');
+      el.textContent = def ? def.icon : '🛡️';
       el.style.left = g.x.toFixed(1) + 'px';
       el.style.top = g.y.toFixed(1) + 'px';
       el.style.animationDelay = `${delay}ms, ${delay + 1500}ms`;
+      fx.appendChild(el);
+    };
+    // 防御类道具的特效（含空放：没人打你也要亮）
+    const defenseFx = (g, delay, def, broken) => {
+      const el = document.createElement('span');
+      el.className = 'dfx ' + def.cls + (broken ? ' broken' : '');
+      el.style.left = g.x.toFixed(1) + 'px';
+      el.style.top = g.y.toFixed(1) + 'px';
+      el.style.animationDelay = `${delay}ms`;
+      el.innerHTML = `<i class="ic">${def.icon}</i><b class="lb">${broken ? '被反刀破盾' : def.label}</b>`;
       fx.appendChild(el);
     };
 
@@ -2010,13 +2145,14 @@ const VIEW = (function () {
         const n = (b.rep.alloc && b.rep.alloc[h.item] && b.rep.alloc[h.item][h.to]) || 1;
         const pr = projFor(h.item, n);
         const repTo = res.reports.find(r => r.id === h.to) || {};
+        const devDef = defFxOf(repTo);
         const blocked = repTo.gross > 0 && !(repTo.damage > 0) && !(repTo.reverse && repTo.reverse.success);
         for (let k = 0; k < pr.count; k++) {
           const spread = (k - (pr.count - 1) / 2) * 9;
           fly(pr.icon, curve({ x: e.from.x + spread, y: e.from.y }, { x: e.to.x + spread, y: e.to.y }, 16 + k * 5),
             b.t + k * 45, {});
         }
-        if (blocked) shield(gTo, Math.max(0, b.impact - 80), 'block');   // 被防具挡下：顶出个盾
+        if (blocked) shield(gTo, Math.max(0, b.impact - 80), 'block', devDef);   // 被挡下：用他出的那面盾
       });
       if (b.back.length) {                        // 反盾：盾牌一顶，飞来的刀子原样弹回去
         b.back.forEach(aid => {
@@ -2028,7 +2164,7 @@ const VIEW = (function () {
               b.t + 340 + k * 70, { back: true });
           });
         });
-        shield(gFrom, b.t + 60, 'rev');
+        shield(gFrom, b.t + 60, 'rev', defFxOf(b.rep));
       }
       if (b.steal.length) {                       // 偷：一只手飘过去
         b.steal.forEach((s, k) => {
@@ -2039,6 +2175,18 @@ const VIEW = (function () {
         });
       }
     });
+    // 每个出了防御类道具的人都亮一下自己的那套特效（空放也亮）；
+    // 被人用「反刀」完全破盾的，亮"破盾"
+    res.reports.forEach(rep => {
+      const def = defFxOf(rep);
+      if (!def) return;
+      const g = geo(rep.id);
+      if (!g) return;
+      const at = tl.actsAt[rep.id] || Math.round(tl.total * 0.28);
+      const broken = !!(rep.reverse && rep.reverse.nullified);
+      defenseFx(g, at + 120, def, broken);
+    });
+
     wrap.appendChild(fx);
   }
 
@@ -2071,6 +2219,7 @@ const VIEW = (function () {
     if (old) old.remove();
     const pub = app.pub, res = pub && pub.lastResult, tl = app._tl;
     if (!pub || pub.phase !== 'reveal' || !res || !tl) return;
+    if ((app.remainTotal - app.remainMs) > app.remainTotal * 0.7) return;   // 演出过半就别重头放
     const box = wrap.getBoundingClientRect();
     if (!box.width || !box.height) return;            // 没有布局信息（或 jsdom）就不画
 
@@ -2212,7 +2361,7 @@ const VIEW = (function () {
   ];
   const TAB_OF = {
     yidao: 'attack', shuangdao: 'attack', shangdiao: 'attack', sidao: 'attack', wudao: 'attack',
-    caihong: 'attack', cibao: 'attack', podun: 'attack',
+    caihong: 'attack', cibao: 'attack', podun: 'attack', fandao: 'attack',
     busi: 'defense', xiaofang: 'defense', dafang: 'defense', cidun: 'defense', heidong: 'defense',
     baidong: 'defense', hezhang: 'defense',
     xiaofan: 'reverse', dafan: 'reverse', chaofan: 'reverse',
@@ -2373,6 +2522,8 @@ const VIEW = (function () {
       <h4>攻击</h4>
       <p>一刀 1 / 双刀 2 / 上吊 3 / 四刀 4 / 五刀 5 / 彩虹斩 8。点对手头像选目标，买 N 把同种刀就能选 N 个人，旁边有「全选」。
          <b>攻击多少点，本回合就自带多少点防御</b>（五刀＝自带 5 防，彩虹斩＝自带 8 防）。</p>
+      <p><b>反刀</b>（1 点）：伤害只有 0.5，但打到<b>反盾</b>上时——对方反盾<b>完全破盾</b>
+         （整回合谁的刀都弹不回来），并且<b>无视他的血量</b>直接斩杀。专治反盾。</p>
       <p><b>彩虹斩</b>：命中即死，无视血量和自守；但会被防具挡下（算出来 ≤ 0 就无效）。没开叠加包时一回合只能 1 个。</p>
       <p><b>赠品</b>（回合末发放、自动进背包、可跨回合累积，要自己选用）：上吊送 1 精血（0.5 伤害）、四刀送 1 剑气（1 伤害）、
          五刀送 1 天雷（3 伤害，<b>在小防面前只有 2 伤害</b>）、不死送 1 肥美（0.5 伤害）。叠肥＝吃掉 3 个肥美造成 2-ε 伤害
@@ -2387,6 +2538,7 @@ const VIEW = (function () {
       <p>像一个弹簧：外面打你的总攻击 <b>≤ 弹性范围</b> → 反盾成功，<b>无视血量杀死所有攻击你的人</b>（他们的防御也救不了）；
          <b>&gt; 弹性范围</b> → 反盾被破，反盾者无视血量当场暴毙，攻击方活着。
          小反 2（1 点）/ 大反 4（2 点）/ 超反 6.5（3 点），一回合只能上一个。</p>
+      <p><b>克星是「反刀」</b>：被反刀打中 → 反盾完全破盾（谁的刀都弹不回来）+ 无视血量当场暴毙。</p>
 
       <h4>偷（0 点）</h4>
       <p>用「偷」的回合防御固定为 0.5。指定若干对象后，<b>逐个对象各自独立结算</b>：</p>
