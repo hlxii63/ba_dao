@@ -521,6 +521,47 @@ svg.arrows path { animation: draw-arrow .5s ease-out both; }
 @media (prefers-reduced-motion: reduce) {
   .fx { display: none; }
 }
+
+/* ============================================================================
+   逐回合档案（最终战报）与复盘器
+   间距仍然只用 4 / 8 / 12 / 16 / 24 这几档
+   ==========================================================================*/
+details.rnd { border-bottom: 1px solid var(--line-2); }
+details.rnd:last-child { border-bottom: 0; }
+details.rnd > summary {
+  cursor: pointer; padding: 10px 0; font-weight: 700; font-size: 14px;
+  list-style-position: inside;
+}
+details.rnd > summary::marker { color: var(--blue); }
+details.rnd[open] > summary { color: var(--blue-d); padding-bottom: 4px; }
+details.rnd > ul.logbox { padding: 0 0 8px; }
+details.card > summary { padding: 2px 0; }
+
+/* 回合选择：一排可以横向划的圆形按钮 */
+.rchips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 4px; }
+.rchips::-webkit-scrollbar { display: none; }
+.rchip {
+  flex: 0 0 auto; border: 1px solid var(--line); background: var(--card); color: var(--ink-2);
+  border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600;
+  font-family: inherit; cursor: pointer; line-height: 1.4;
+}
+.rchip.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.rchip:active { transform: scale(.96); }
+
+.rplay { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* 总览矩阵：横向滚动，首列与表头粘住 */
+.rtable { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line-2); border-radius: var(--r-s); }
+.rtable table { border-collapse: collapse; font-size: 12px; }
+.rtable th, .rtable td {
+  border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2);
+  padding: 6px 8px; text-align: left; vertical-align: top; white-space: nowrap;
+}
+.rtable th { background: #f7f8fa; font-weight: 700; position: sticky; top: 0; z-index: 2; }
+.rtable td.rr, .rtable th.rr { position: sticky; left: 0; background: #f7f8fa; z-index: 1; }
+.rtable tr.on td { background: var(--blue-bg); }
+.rtable tr.on td.rr { background: var(--blue-bg); }
+.rtable td .mini { color: var(--muted); font-size: 11px; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -562,6 +603,9 @@ const BADAO = (function () {
   const EPS = 1e-12;         // 浮点容差，必须远小于 FEI_EPS
   const FEI_EPS = 1e-9;      // 叠肥的 ε（趋于 0+，但要大到能被浮点分辨）
   const FEI_ATK = 2 - FEI_EPS; // 叠肥：2-ε —— 2 血的人能剩 ε 血站住，且破不了「小反」的 2 点弹性
+  const MAX_HISTORY = 200;   // 最多留 200 回合的逐回合快照
+  const MATCH_FORMAT = 'badao-match';
+  const MATCH_VERSION = 1;
 
   /* ---------------------------------------------------------------- 道具表 */
   // kind: gain 集 | attack 攻击 | defense 防御 | reverse 反盾 | smite 磁暴
@@ -669,17 +713,37 @@ const BADAO = (function () {
     };
   }
 
+  const DEFAULT_SETTINGS = { selectSec: 5, revealSec: 5, autoAdvance: true, ecoOpen: false, packs: {} };
+  /** 设置项补默认值；导入别人的对局文件时也走这里，缺字段不会崩 */
+  function normalizeSettings(raw) {
+    const s = Object.assign({}, DEFAULT_SETTINGS, raw || {});
+    s.packs = Object.assign({}, (raw && raw.packs) || {});
+    PACK_KEYS.forEach(k => { s.packs[k] = !!s.packs[k]; });
+    s.ecoOpen = !!s.ecoOpen;                        // 点数是否像实体筹码一样明牌
+    s.autoAdvance = s.autoAdvance !== false;
+    s.selectSec = Math.min(600, Math.max(3, Number(s.selectSec) || 5));
+    s.revealSec = Math.min(120, Math.max(2, Number(s.revealSec) || 5));
+    return s;
+  }
+
   function newState(settings) {
     const s = {
       players: [], round: 1, phase: 'lobby', winner: null,
-      settings: Object.assign(
-        { selectSec: 5, revealSec: 5, autoAdvance: true, ecoOpen: false, packs: {} },
-        settings || {}),
-      log: [], lastResult: null
+      settings: normalizeSettings(settings),
+      log: [], lastResult: null,
+      history: []                                   // 逐回合全量快照：最终战报与复盘都读它
     };
-    PACK_KEYS.forEach(k => { if (typeof s.settings.packs[k] !== 'boolean') s.settings.packs[k] = false; });
-    s.settings.ecoOpen = !!s.settings.ecoOpen;      // 点数是否像实体筹码一样明牌
     return s;
+  }
+
+  /** 全场快照：复盘时要看到每个人当时手里多少点、几点血、背包里有什么 */
+  function snapPlayers(state) {
+    return state.players.map(p => ({
+      id: p.id, name: p.name, isHost: !!p.isHost, isBot: !!p.isBot,
+      alive: p.alive, hp: p.hp, points: p.points,
+      bag: Object.assign({}, p.bag),
+      selfGuardUntil: p.selfGuardUntil, inDuel: !!p.inDuel
+    }));
   }
 
   function addPlayer(state, id, name, opts) {
@@ -846,6 +910,8 @@ const BADAO = (function () {
     const round = state.round;
     const log = [];
     const say = t => log.push(`R${round} ${t}`);
+    // 结算前的全场快照：复盘时要能回答"他这一回合开始时手上有几点、几点血"
+    const before = snapPlayers(state);
 
     // 0) 快照出招（结算期间不再变化）
     state.players.forEach(p => {
@@ -1104,6 +1170,10 @@ const BADAO = (function () {
     }
 
     state.lastResult = result;
+    // 逐回合全量存一份：最终战报页与"导入复盘"都靠它，才说得清每一拍的来龙去脉。
+    // 只留最近 200 回合，避免一局打太久把内存撑爆。
+    state.history.push({ round: round, before: before, after: snapPlayers(state), reports: clone(result.reports) });
+    if (state.history.length > MAX_HISTORY) state.history = state.history.slice(-MAX_HISTORY);
     // 回合数由结算内部推进，避免"调用方忘记加一"导致决斗计时永不走动
     state.round = round + 1;
     // 日志：一回合一条（结构化，发快照时再按"给谁看"渲染，点数才不会漏）
@@ -1364,6 +1434,87 @@ const BADAO = (function () {
     return normalize(state, id, picks);
   }
 
+  /* ------------------------------------------------- 对局存档：导出 / 导入 */
+  /**
+   * 把整局导成一个 JSON。**故意是全量的**：含所有人的点数、背包、每回合出招与伤害算式。
+   * 这是"赛后复盘"用的档案，和"对局中不给别人看点数"是两件事——所以只有主动导出才拿得到。
+   */
+  function exportMatch(state, opts) {
+    opts = opts || {};
+    const left = alivePlayers(state);
+    return {
+      format: MATCH_FORMAT,
+      version: MATCH_VERSION,
+      exportedAt: new Date().toISOString(),
+      roomCode: opts.roomCode || '',
+      settings: clone(state.settings),
+      roundCount: state.history.length,
+      winner: state.winner ? nameOf(state, state.winner) : null,
+      alive: left.map(p => p.name),
+      players: state.players.map(p => ({
+        id: p.id, name: p.name, isHost: !!p.isHost, isBot: !!p.isBot,
+        alive: p.alive, hp: p.hp, points: p.points, bag: Object.assign({}, p.bag)
+      })),
+      history: clone(state.history)
+    };
+  }
+
+  /**
+   * 读一份对局文件。坏文件一律给出"人话"的错误原因，不让复盘器拿着半截数据崩掉。
+   * 缺字段的回合会被跳过而不是整份报废——毕竟文件可能是别人手改过的。
+   */
+  function importMatch(input) {
+    let data = input;
+    if (typeof input === 'string') {
+      try { data = JSON.parse(input); }
+      catch (e) { return { ok: false, errors: ['这不是一个合法的 JSON 文件'], match: null }; }
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return { ok: false, errors: ['文件内容不是一份对局记录'], match: null };
+    }
+    const errors = [];
+    if (data.format !== MATCH_FORMAT) errors.push('这不是「拔刀」的对局文件（缺 format: ' + MATCH_FORMAT + '）');
+    if (!Array.isArray(data.history)) errors.push('文件里没有 history（逐回合记录）');
+    if (errors.length) return { ok: false, errors: errors, match: null };
+
+    const rounds = [];
+    data.history.forEach((h, i) => {
+      if (!h || typeof h !== 'object') return;
+      const reports = Array.isArray(h.reports) ? h.reports.filter(r => r && r.id) : [];
+      const before = Array.isArray(h.before) ? h.before.filter(p => p && p.id) : [];
+      const after = Array.isArray(h.after) ? h.after.filter(p => p && p.id) : [];
+      if (!reports.length && !after.length) return;      // 空回合直接跳过
+      rounds.push({ round: Math.floor(num(h.round)) || i + 1, before: before, after: after, reports: reports });
+    });
+    if (!rounds.length) return { ok: false, errors: ['这份文件里连一回合的记录都没有'], match: null };
+
+    const declared = Math.floor(num(data.roundCount));
+    if (declared && declared !== rounds.length) {
+      errors.push(`文件自称 ${declared} 回合，实际读到 ${rounds.length} 回合（按实际读到的显示）`);
+    }
+    const players = (Array.isArray(data.players) ? data.players : []).filter(p => p && p.id).map(p => ({
+      id: p.id, name: p.name || p.id, isHost: !!p.isHost, isBot: !!p.isBot,
+      alive: p.alive !== false, hp: num(p.hp), points: num(p.points),
+      bag: Object.assign({}, p.bag || {})
+    }));
+    GIFT_IDS.forEach(g => players.forEach(p => { p.bag[g] = num(p.bag[g]); }));
+    return {
+      ok: true,
+      errors: errors,                                   // 非致命的问题也带出去，界面提示一句
+      match: {
+        format: MATCH_FORMAT, version: Math.floor(num(data.version)) || MATCH_VERSION,
+        exportedAt: typeof data.exportedAt === 'string' ? data.exportedAt : '',
+        roomCode: typeof data.roomCode === 'string' ? data.roomCode : '',
+        settings: normalizeSettings(data.settings),
+        winner: typeof data.winner === 'string' ? data.winner : null,
+        alive: Array.isArray(data.alive) ? data.alive.map(String) : [],
+        players: players,
+        roundCount: rounds.length,
+        history: rounds
+      }
+    };
+  }
+
   /* --------------------------------------------------- 对外只读状态（发网） */
   /** 按"给谁看"把结算战报里的点数数额抹掉（自己的那份保留） */
   function sanitizeResult(res, showAll, viewer) {
@@ -1383,16 +1534,22 @@ const BADAO = (function () {
   /**
    * 隐藏别人还没公开的东西；展示阶段才全部公开。
    * opts.viewerId：这份快照是给谁看的（每个人拿到的快照不一样）。
+   * opts.withHistory：要不要带"逐回合全量档案"（只有房主自己和对局结束后才给）。
    * 「点数公开」关掉时，是**全流程**都看不到别人的点数与背包（含结算展示与日志里的数额），
    * 这样才没法靠"点数消耗"反推出对手出了什么。
+   * 例外：对局已经结束（phase === 'over'）就翻开底牌——牌都打完了，藏着没有意义，
+   * 而且最终战报要逐回合把"谁+谁=总共挨 X − 防御 Y = 掉 Z"写清楚。
    */
   function publicState(state, opts) {
     opts = opts || {};
     const viewer = opts.viewerId || null;
     const reveal = state.phase === 'reveal' || state.phase === 'over';
+    const gameOver = state.phase === 'over';
     const ecoOpen = !!state.settings.ecoOpen;
-    const hideEco = !ecoOpen && state.phase !== 'lobby' && !!viewer;
-    const fmtOpts = { showAll: ecoOpen || !viewer, viewerId: viewer };
+    const showAll = ecoOpen || gameOver || !viewer;
+    const hideEco = !showAll && state.phase !== 'lobby' && !!viewer;
+    const fmtOpts = { showAll: showAll, viewerId: viewer };
+    const withHistory = !!opts.withHistory || gameOver;
     const s = {
       round: state.round, phase: state.phase, winner: state.winner,
       settings: state.settings, hostId: state.hostId, ecoOpen: ecoOpen,
@@ -1409,7 +1566,9 @@ const BADAO = (function () {
         return o;
       }),
       log: state.log.slice(-40).map(e => formatLogEntry(e, fmtOpts)),
-      lastResult: reveal ? sanitizeResult(state.lastResult, ecoOpen || !viewer, viewer) : null,
+      lastResult: reveal ? sanitizeResult(state.lastResult, showAll, viewer) : null,
+      // 逐回合档案：直接把引用递出去（settle 里都是"换新数组"而不是就地改，所以不会被后续回合污染）
+      history: withHistory ? state.history : null,
       ecoHidden: hideEco
     };
     return s;
@@ -1417,7 +1576,7 @@ const BADAO = (function () {
 
   return {
     EPS: EPS, ITEM_LIST: ITEM_LIST, ITEMS: ITEMS, PACK_KEYS: PACK_KEYS, PACK_NAMES: PACK_NAMES,
-    GIFT_IDS: GIFT_IDS,
+    GIFT_IDS: GIFT_IDS, MAX_HISTORY: MAX_HISTORY, MATCH_FORMAT: MATCH_FORMAT, MATCH_VERSION: MATCH_VERSION,
     newState: newState, addPlayer: addPlayer, getPlayer: getPlayer,
     alivePlayers: alivePlayers, otherAlive: otherAlive,
     validate: validate, normalize: normalize, unitCost: unitCost, totalCost: totalCost,
@@ -1425,7 +1584,9 @@ const BADAO = (function () {
     isStackable: isStackable, isAimable: isAimable, STACKABLE: STACKABLE,
     settle: settle, tickDuels: tickDuels, killPlayer: killPlayer,
     describePicks: describePicks, publicState: publicState, botAction: botAction,
-    fmtNum: fmtNum, round2: round2, countOf: countOf, isDuelTarget: isDuelTarget
+    fmtNum: fmtNum, round2: round2, countOf: countOf, isDuelTarget: isDuelTarget,
+    normalizeSettings: normalizeSettings, snapPlayers: snapPlayers,
+    exportMatch: exportMatch, importMatch: importMatch
   };
 })();
 
@@ -1445,8 +1606,9 @@ const VIEW = (function () {
   const B = BADAO;
 
   const app = {
-    mode: 'home',      // home | room | game
+    mode: 'home',      // home | room | game | replay
     status: '',        // 顶部连接状态
+    matchErr: '',      // 导入对局文件时的报错（单独放，别和联机状态混在一起）
     roomCode: '',
     me: null,
     isHost: false,
@@ -1454,14 +1616,15 @@ const VIEW = (function () {
     remainMs: 0,
     remainTotal: 0,
     err: '',
-    busy: false
+    busy: false,
+    replay: null       // 复盘：{ match, idx, animate } —— 导入对局文件后才有
   };
 
   // chosen: 本回合挑中的那一种道具；count: 可叠道具的数量；sel: 每个道具选中的头像
   let draft = { chosen: null, count: 1, sel: {}, steal: [] };
   let draftFor = -1;
   let tab = 'attack';
-  let sheet = null;          // null | 'rules' | 'log'
+  let sheet = null;          // null | 'rules' | 'log' | { kind:'dump', text, name }（导出兜底：把 JSON 摊出来）
   let lastSig = '';
 
   /* ---------------------------------------------------------------- 小工具 */
@@ -1605,11 +1768,12 @@ const VIEW = (function () {
 
   /* =========================================================== 渲染入口 */
   function render() {
-    if (app.pub) syncDraftRound();
+    if (app.pub && app.mode === 'game') syncDraftRound();
     pruneDraft();
     const el = $('#app');
     let html = '';
     if (app.mode === 'home') html = screenHome();
+    else if (app.mode === 'replay') html = screenReplay();
     else if (!app.pub || app.pub.phase === 'lobby') html = screenRoom();
     else html = screenGame();
     el.innerHTML = html;
@@ -1621,11 +1785,12 @@ const VIEW = (function () {
   }
 
   function sig() {
+    if (app.mode === 'replay') return 'replay|' + (app.replay ? app.replay.idx : '') + '|' + (app.replay ? app.replay.animate : '');
     if (!app.pub) return app.mode + '|';
     return app.mode + '|' + app.pub.phase + '|' + app.pub.round + '|' + app.pub.winner + '|' +
       app.pub.players.map(p => [p.id, p.alive, p.hp, p.points, p.submitted, p.ready, p.connected,
         p.inDuel ? 'd' + (p.duel ? p.duel.left : '') : ''].join(',')).join(';') +
-      '|' + JSON.stringify(draft) + '|' + tab + '|' + sheet + '|' + app.err;
+      '|' + JSON.stringify(draft) + '|' + tab + '|' + (typeof sheet === 'object' ? 'dump' : sheet) + '|' + app.err;
   }
   /** 没有实质变化就只刷新倒计时，别打断正在点的按钮 */
   function softRender() {
@@ -1678,6 +1843,19 @@ const VIEW = (function () {
           <b>时间到了还没锁定就自动出「集」</b>。
           血量从 0 起步，<b>挨到 1 点伤害就会死</b>，全靠防具和反盾活命。
         </div>
+      </div>
+      <div class="card" data-drop="1">
+        <div class="row space">
+          <b>看过的一局，想再翻一遍？</b>
+          <span class="badge grey">复盘</span>
+        </div>
+        <div class="small muted" style="margin-top:8px">
+          导入对局 JSON，就能逐回合重看：每个人当时手上有几点、出了什么、这刀又是怎么算到他头上的。
+        </div>
+        <input id="matchFile" type="file" accept=".json,application/json" style="display:none">
+        <button class="btn ghost block" style="margin-top:10px" data-act="import">📂 选择对局 JSON 文件</button>
+        <div class="tiny muted" style="margin-top:6px;text-align:center">也可以直接把文件拖到这张卡片上</div>
+        ${app.matchErr ? `<div class="err">${esc(app.matchErr)}</div>` : ''}
       </div>
       <div style="height:24px"></div>
       <div class="tiny muted" style="text-align:center">开房间在线联机 · 也可以和电脑对战 · 无需下载安装</div>
@@ -1834,7 +2012,7 @@ const VIEW = (function () {
     </div></div>
 
     <div class="wrap">
-      <div class="players">${pub.players.map((p, i) => playerCard(p, i, reveal, tl, animate)).join('')}</div>
+      ${playersHtml(pub, reveal, tl, animate)}
       ${reveal && tl ? captionHtml(tl) : ''}
       ${pub.ecoHidden ? '<div class="tiny muted" style="margin-top:6px;text-align:center">对方的点数与背包要等结算时才公开（免得被反推出谁出了什么）</div>'
         : (pub.ecoOpen ? '<div class="tiny muted" style="margin-top:6px;text-align:center">明牌局：所有人的点数都是公开的</div>' : '')}
@@ -1906,7 +2084,7 @@ const VIEW = (function () {
   function beatText(rep, hits, back, steal) {
     const label = Object.keys(rep.items || {})
       .map(id => `${B.ITEMS[id] ? B.ITEMS[id].name : id}×${rep.items[id]}`).join('、') || '空手';
-    if (hits.length) return `⚔ ${label} → ${hits.map(h => `${nameOf(h.to)} −${fmtNum(h.dmg)}`).join('、')}`;
+    if (hits.length) return `⚔ ${label} → ${hits.map(hitLabel).join('、')}`;
     if (back.length) return `🪃 反盾弹回 → ${back.map(nameOf).join('、')}`;
     if (steal.length) return `🫳 偷 → ${steal.map(s => s.name).join('、')}`;
     return label;
@@ -1945,6 +2123,11 @@ const VIEW = (function () {
       `<span class="cap" style="animation-delay:${b.t + 80}ms">${esc(b.rep.name)} ${esc(b.text)}</span>`).join('')}</div>`;
   }
 
+  /** 玩家棋盘：出招阶段与结算演出共用；复盘也走这一套，所以复盘画面和当时长得一模一样 */
+  function playersHtml(pub, reveal, tl, animate) {
+    return `<div class="players">${pub.players.map((p, i) => playerCard(p, i, reveal, tl, animate)).join('')}</div>`;
+  }
+
   function playerCard(p, i, reveal, tl, animate) {
     const flags = [];
     if (p.isHost) flags.push('<span class="badge amber">房主</span>');
@@ -1977,7 +2160,7 @@ const VIEW = (function () {
       const itemLabel = Object.keys(itemsSnap)
         .map(id => `${B.ITEMS[id] ? B.ITEMS[id].name : id}×${itemsSnap[id]}`).join('、');
       let head;
-      if (hits.length) head = `${itemLabel} → ${hits.map(h => `${nameOf(h.to)} −${fmtNum(h.dmg)}`).join('、')}`;
+      if (hits.length) head = `${itemLabel} → ${hits.map(hitLabel).join('、')}`;
       else if (itemsSnap.tou) head = `偷 → ${stealSnap.map(nameOf).join('、') || '（没选人）'}`;
       else head = itemLabel || B.describePicks(app.pub, { items: itemsSnap, alloc: (rep && rep.alloc) || {}, steal: stealSnap });
       const costTxt = (rep && rep.cost != null && rep.cost > 0) ? `<span class="cost">消耗 ${fmtNum(rep.cost)} 点</span>` : '';
@@ -2210,6 +2393,17 @@ const VIEW = (function () {
     return p ? p.name : '???';
   };
 
+  /** 一句"打到谁 − 多少"：磁暴这类 0 伤害的只写目标（破盾效果由事件行交代） */
+  function hitLabel2(h, hit) {
+    const nm = rosterName(h, hit.to);
+    return hit.dmg > 0 ? `${nm} −${fmtNum(hit.dmg)}` : nm;
+  }
+
+  function hitLabel(h) {
+    const nm = nameOf(h.to);
+    return h.dmg > 0 ? `${nm} −${fmtNum(h.dmg)}` : nm;
+  }
+
   /** 在玩家格子上画「谁打谁」的连线：红=攻击、紫=磁暴、橙=反盾弹回、青=偷 */
   const ARROW_COLORS = { hit: '#ef4444', smite: '#8b5cf6', back: '#f59e0b', steal: '#0891b2' };
   function drawArrows() {
@@ -2310,7 +2504,7 @@ const VIEW = (function () {
       const hits = r.hits || [];
       const label = Object.keys(r.items || {}).map(id => `${B.ITEMS[id] ? B.ITEMS[id].name : id}×${r.items[id]}`).join('、');
       const head = hits.length
-        ? `${label} → ${hits.map(h => `${nameOf(h.to)} −${fmtNum(h.dmg)}`).join('、')}`
+        ? `${label} → ${hits.map(hitLabel).join('、')}`
         : B.describePicks(app.pub, { items: r.items, alloc: r.alloc, steal: r.steal });
       const died = r.events.some(e => /阵亡|暴毙/.test(e));
       // "谁+谁=总共多少 − 防御 = 掉多少"，把求和这件事写明白
@@ -2333,25 +2527,381 @@ const VIEW = (function () {
   function screenOver() {
     const pub = app.pub;
     const w = pub.players.find(p => p.id === pub.winner);
+    const hist = pub.history || [];
     return `
     <div class="wrap">
       <div class="card" style="text-align:center;padding:32px 16px">
         <div style="font-size:44px">${w ? '🏆' : '🤝'}</div>
         <h2 style="font-size:24px;font-weight:800;margin-top:8px">${w ? esc(w.name) + ' 拔得头筹！' : '全员阵亡，平局'}</h2>
-        <div class="small muted" style="margin-top:8px">共 ${(pub.lastResult ? pub.lastResult.round : pub.round)} 回合</div>
+        <div class="small muted" style="margin-top:8px">共 ${hist.length || (pub.lastResult ? pub.lastResult.round : pub.round)} 回合</div>
         <div style="margin-top:24px">
           ${app.isHost ? '<button class="btn primary lg block" data-act="rematch">再来一局（回房间重新确认）</button>' : ''}
+          <button class="btn block" style="margin-top:8px" data-act="export">💾 导出对局 JSON（含所有人的点数）</button>
           <button class="btn ghost block" style="margin-top:8px" data-act="rules">看规则</button>
           <button class="btn ghost block" style="margin-top:8px" data-act="leave">离开房间</button>
         </div>
+        <div class="tiny muted" style="margin-top:10px">导出后，可在首页「导入对局 JSON · 复盘」里逐回合重看</div>
       </div>
-      <div class="card">
-        <b>最终战报</b>
-        <div class="divider"></div>
-        ${revealList()}
-      </div>
+      ${hist.length ? finalReportHtml(hist) : `<div class="card"><b>最终战报</b><div class="divider"></div>${revealList()}</div>`}
       <div style="height:24px"></div>
     </div>`;
+  }
+
+  /* --------------------------------------------------- 逐回合档案：最终战报 */
+  const ROUND_OPEN_MAX = 6;      // 回合不多就全展开；回合多了默认只展开最后一回合，免得滑不到底
+
+  /** 最终战报：一回合一张折叠面板，逐条把"谁 + 谁 = 总共挨 X − 防御 Y = 掉 Z"写全 */
+  function finalReportHtml(hist) {
+    const openAll = hist.length <= ROUND_OPEN_MAX;
+    return `<div class="card">
+      <div class="row space">
+        <b>最终战报 · 逐回合</b>
+        <button class="btn sm ghost" data-act="expand" data-open="${openAll ? '0' : '1'}">${openAll ? '全部收起' : '全部展开'}</button>
+      </div>
+      <div class="divider"></div>
+      ${hist.map((h, i) => `<details class="rnd" ${(openAll || i === hist.length - 1) ? 'open' : ''}>
+        <summary>第 ${h.round} 回合${roundOutcomeText(h)}</summary>
+        ${roundRowsHtml(h)}
+      </details>`).join('')}
+    </div>`;
+  }
+
+  /** 折叠标题右边那句小结：这一回合下来还剩几个人 / 谁赢了 */
+  function roundOutcomeText(h) {
+    const left = (h.after || []).filter(p => p.alive);
+    const dead = (h.reports || []).filter(r => r.dead).map(r => repName(h, r));
+    const tag = dead.length ? ` · ☠ ${dead.join('、')}` : '';
+    if (left.length === 1) return `${tag} · 🏆 ${esc(left[0].name)} 胜`;
+    if (!left.length) return `${tag} · 🤝 全员阵亡`;
+    return `${tag} · 存活 ${left.length} 人`;
+  }
+
+  /** 名字查表：战报 / 结算前快照 / 结算后快照里抓，抓不到就退回 id */
+  function rosterName(h, id) {
+    const pool = (h.reports || []).concat(h.before || [], h.after || []);
+    const hit = pool.find(x => x.id === id);
+    return hit && hit.name ? hit.name : id;
+  }
+
+  /** 战报里那位玩家的名字（手改过的文件可能缺 name，退回查表） */
+  function repName(h, r) {
+    return (r && r.name) || rosterName(h, r && r.id) || '?';
+  }
+
+  /**
+   * 一回合里每个人的完整流水：出招 → 花了多少点 → 点数/血量怎么变 → 挨打算式 → 事件。
+   * "谁 + 谁 = 总共挨 X − 防御 Y = 掉 Z"整条写出来，不让人自己心算。
+   */
+  function roundRowsHtml(h) {
+    const rows = (h.reports || []).map(r => {
+      const b = (h.before || []).find(p => p.id === r.id) || {};
+      const a = (h.after || []).find(p => p.id === r.id) || {};
+      // 这回合开始前就已经出局的人：一行带过，别拿"空手/防御 0"去糊人
+      if (r.alive === false) {
+        return `<li class="res"><div><b>${esc(repName(h, r))}</b> <span class="badge grey">已出局</span>
+          <span class="tiny muted">这回合没他的事</span></div></li>`;
+      }
+      const items = Object.keys(r.items || {})
+        .map(id => `${B.ITEMS[id] ? B.ITEMS[id].name : id}×${r.items[id]}`).join('、') || '空手';
+      const hits = r.hits || [];
+      // 「偷」的落点优先用结算时记下的名字（stolenFrom），拿不到再退回目标 id
+      const stealTo = (r.stolenFrom && r.stolenFrom.length
+        ? r.stolenFrom.map(s => s.name)
+        : (r.steal || []).map(t => rosterName(h, t)));
+      const aimed = hits.length
+        ? `${items} → ${hits.map(x => esc(hitLabel2(h, x))).join('、')}`
+        : (stealTo.length ? `偷 → ${stealTo.map(esc).join('、')}` : items);
+
+      const eco = [];
+      if (r.cost != null && r.cost > 0) eco.push(`💸 花 ${fmtNum(r.cost)} 点`);
+      if (b.points != null) eco.push(`🪙 点数 ${fmtNum(b.points)} → ${fmtNum(a.points != null ? a.points : b.points)}`);
+      // 这回合被打死的人，血量的"去向"是阵亡而不是某个数字
+      if (b.hp != null) eco.push(`❤ 血量 ${fmtHp(b.hp)} → ${r.dead ? '阵亡' : fmtHp(a.hp != null ? a.hp : b.hp)}`);
+
+      // 挨打这一行的写法要分情况：反盾、磁暴、纯防御都不是"总攻击 − 防御"能说清的
+      const incoming = [];
+      (h.reports || []).forEach(o => (o.hits || []).forEach(x => { if (x.to === r.id) incoming.push(`${repName(h, o)} ${fmtNum(x.dmg)}`); }));
+      const defTxt = `防御 ${fmtNum(r.def)}` + (r.defAttack ? `（含刀自带 ${fmtNum(r.defAttack)}）` : '');
+      const sumOf = incoming.join(' + ') || '挨打';
+      let sum;
+      if (r.reverse && r.reverse.success) {
+        sum = `🧮 ${sumOf} = 总共挨 ${fmtNum(r.gross)} 点，落在 ${fmtNum(r.reverse.range)} 点弹性里 → 反盾成功，攻击者被弹死`;
+      } else if (r.reverse && r.reverse.nullified) {
+        sum = `🧮 反盾被「反刀」完全破掉 → 整回合谁的刀都弹不回来，本人无视血量当场暴毙`;
+      } else if (r.reverse && r.reverse.success === false) {
+        sum = `🧮 ${sumOf} = 总共挨 ${fmtNum(r.gross)} 点 > 弹性 ${fmtNum(r.reverse.range)} → 反盾被破，反盾者暴毙`;
+      } else if (r.gross > 0) {
+        sum = `🧮 ${sumOf} = 总共挨 ${fmtNum(r.gross)} 点 − ${defTxt} = ${r.damage > 0 ? '掉 ' + fmtNum(r.damage) + ' 点' : '全部挡下'}`;
+      } else if (incoming.length) {
+        sum = `🧮 ${sumOf} —— 0 点伤害${r.dead ? '，但当场暴毙' : '，没事'}`;
+      } else {
+        sum = `🧮 这一回合没人打他（自带防御 ${fmtNum(r.def)}${r.defAttack ? `，其中刀自带 ${fmtNum(r.defAttack)}` : ''}）`;
+      }
+
+      // "受到 X 点伤害 / 血量 a → b"已经在算式里念过了，别再重复一遍
+      const evs = (r.events || []).filter(e => e && !/^受到 .* 点伤害/.test(e));
+      return `<li class="res ${r.dead ? 'died' : ''}">
+        <div><b>${esc(repName(h, r))}</b>${r.dead ? ' <span class="badge red">☠ 真死</span>' : ''} ${esc(aimed)}</div>
+        ${eco.length ? `<div class="tiny muted">${eco.join(' ｜ ')}</div>` : ''}
+        <div class="tiny ${r.damage > 0 ? 'err' : 'muted'}">${esc(sum)}</div>
+        ${evs.map(e => `<div class="tiny muted">· ${esc(e)}</div>`).join('')}
+      </li>`;
+    }).join('');
+    return `<ul class="logbox" style="max-height:none">${rows}</ul>`;
+  }
+
+  /* ------------------------------------------- 对局存档：导出 JSON / 导入复盘 */
+  const MATCH_FORMAT = 'badao-match';
+  const MATCH_VERSION = 1;
+  const REPLAY_TOTAL_MS = 6000;   // 复盘时每回合演出的"名义总时长"，只用来排拍子快慢
+
+  /** 从当前快照拼出对局档案。房主任何时候都能导出；对局结束后人人可导出。 */
+  function buildMatchFromPub(pub) {
+    if (!pub || !pub.history || !pub.history.length) return null;
+    const w = pub.players.find(p => p.id === pub.winner);
+    return {
+      format: MATCH_FORMAT, version: MATCH_VERSION,
+      exportedAt: new Date().toISOString(),
+      roomCode: app.roomCode || '',
+      settings: pub.settings,
+      roundCount: pub.history.length,
+      winner: w ? w.name : null,
+      alive: pub.players.filter(p => p.alive).map(p => p.name),
+      players: pub.players.map(p => ({
+        id: p.id, name: p.name, isHost: !!p.isHost, isBot: !!p.isBot,
+        alive: p.alive, hp: p.hp, points: p.points, bag: p.bag
+      })),
+      history: pub.history
+    };
+  }
+
+  function matchFileName(match) {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+    return `拔刀对局-${match.roomCode || '单机'}-${match.roundCount}回合-${stamp}.json`;
+  }
+
+  /** 触发下载；浏览器不给下载（老环境 / 被拦）就把 JSON 摊在弹层里让玩家自己复制 */
+  function downloadJson(text, name) {
+    try {
+      if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') throw new Error('no objectURL');
+      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) { /* 已经失效就算了 */ } }, 4000);
+      return true;
+    } catch (e) {
+      sheet = { kind: 'dump', text: text, name: name };     // 退回"摆出文本"，至少不丢数据
+      renderSheet();
+      return false;
+    }
+  }
+
+  function doExport() {
+    const match = buildMatchFromPub(app.pub);
+    if (!match) { toast('这一局还没有打完一回合，没东西可导出'); return; }
+    const text = JSON.stringify(match, null, 2);
+    const name = matchFileName(match);
+    if (downloadJson(text, name)) toast(`已导出 ${match.roundCount} 回合的对局（${(text.length / 1024).toFixed(0)} KB）`);
+    else toast('浏览器不让直接下载，已把 JSON 摊在下面，全选复制也行');
+  }
+
+  /** 读进来一份对局文件 → 进复盘模式。坏文件给出人话的原因，不进。 */
+  function importMatchText(text) {
+    const r = B.importMatch(text);
+    if (!r.ok) {
+      app.matchErr = r.errors.join('；');
+      render();
+      toast(r.errors[0]);
+      return false;
+    }
+    app.matchErr = '';
+    app.replay = { match: r.match, idx: 0, animate: true };
+    app.mode = 'replay';
+    app.pub = null;
+    app.me = null;
+    app.status = '';
+    sheet = null;
+    render();
+    toast(`已载入 ${r.match.roundCount} 回合的对局，从第 1 回合开始看`);
+    if (r.errors.length) setTimeout(() => toast(r.errors[0]), 2400);   // 非致命的小毛病，晚一点再提一句
+    return true;
+  }
+
+  function importFile(file) {
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { app.matchErr = '文件太大了（超过 8 MB），确认一下是不是拿错了文件'; render(); return; }
+    const reader = new FileReader();
+    reader.onload = () => importMatchText(String(reader.result || ''));
+    reader.onerror = () => { app.matchErr = '这个文件读不出来，换一个试试'; render(); toast('文件读不出来'); };
+    reader.readAsText(file);
+  }
+
+  function exitReplay() {
+    app.replay = null;
+    app.pub = null;
+    app.mode = 'home';
+    sheet = null;
+    render();
+  }
+
+  function goReplayRound(idx, animate) {
+    if (!app.replay) return;
+    const n = app.replay.match.history.length;
+    app.replay.idx = Math.max(0, Math.min(n - 1, idx));
+    app.replay.animate = animate !== false;
+    render();
+  }
+
+  /**
+   * 复盘时把"这一回合"伪装成一份正常的公开状态，
+   * playerCard / 连线 / 飞刀 / 字幕条那整套就能原样复用——所以复盘画面和当时一模一样。
+   */
+  function replayFrame() {
+    const rp = app.replay;
+    if (!rp) return null;
+    const hist = rp.match.history;
+    const idx = Math.max(0, Math.min(hist.length - 1, rp.idx));
+    rp.idx = idx;
+    const entry = hist[idx];
+    // 棋盘上用"这一回合开打前"的状态：这样被打死的人会先活着挨刀、再当场倒下，
+    // 而不是像回顾录那样一上来就是灰的；也正好一眼看出"他这回合手上有几点可花"。
+    // （对局中的实时演出用的是回合结束后的状态，所以两边长相一样、数字口径不同，界面上有标注。）
+    const roster = (entry.before && entry.before.length ? entry.before
+      : (entry.after && entry.after.length ? entry.after : rp.match.players)) || [];
+    const players = roster.map(p => ({
+      id: p.id, name: p.name, isHost: !!p.isHost, isBot: !!p.isBot, connected: true,
+      alive: p.alive !== false, hp: Number(p.hp) || 0, points: Number(p.points) || 0,
+      bag: p.bag || {}, submitted: false, ready: true,
+      inDuel: !!p.inDuel, duel: null, selfGuardUntil: p.selfGuardUntil,
+      // picks 只要"存在"就行：出招内容一律读战报快照（rep.items），跟对局中展示阶段的做法一致
+      picks: B.emptyPicks()
+    }));
+    const res = {
+      round: entry.round,
+      order: (entry.reports || []).map(r => r.id),
+      reports: entry.reports || [],
+      winnersHint: []
+    };
+    const pub = {
+      round: entry.round, phase: 'reveal', winner: null,
+      settings: rp.match.settings, hostId: (players.find(p => p.isHost) || {}).id || null,
+      ecoOpen: true, ecoHidden: false,
+      players: players, log: [], lastResult: res, history: null
+    };
+    app.pub = pub;
+    app.remainTotal = REPLAY_TOTAL_MS;
+    // drawFx / drawArrows 里那句"演出过半就别重头画"的保护，正好当静态模式的开关用：
+    // animate=false 时把 remainMs 压到 0（＝演出已经结束），飞刀和连线就不再冒出来。
+    app.remainMs = rp.animate ? REPLAY_TOTAL_MS : 0;
+    app.revealStep = 200;
+    app._tl = buildTimeline(res);
+    return { entry: entry, tl: app._tl };
+  }
+
+  function screenReplay() {
+    if (!app.replay || !app.replay.match.history.length) {
+      return `<div class="wrap"><div class="card">还没有导入对局（或者这份文件里没有回合记录）。</div></div>`;
+    }
+    const rp = app.replay, m = rp.match, hist = m.history;
+    const frame = replayFrame();
+    const entry = frame.entry;
+    const pk = (m.settings && m.settings.packs) || {};
+    const packs = B.PACK_KEYS.filter(k => pk[k]).map(k => B.PACK_NAMES[k]);
+    return `
+    <div class="topbar"><div class="inner">
+      <div class="grow">
+        <div class="row wrap">
+          <b>复盘</b>
+          <span class="badge blue">第 ${entry.round} 回合</span>
+          <span class="badge grey">共 ${hist.length} 回合</span>
+          ${m.roomCode ? `<span class="badge grey">房间 ${esc(m.roomCode)}</span>` : ''}
+          <button class="btn sm ghost" style="margin-left:auto" data-act="replay-exit">退出复盘</button>
+        </div>
+      </div>
+    </div></div>
+
+    <div class="wrap">
+      <div class="card">
+        <div class="row space wrap">
+          <b>${m.winner ? '🏆 ' + esc(m.winner) + ' 拔得头筹' : '🤝 ' + (m.alive && m.alive.length ? '存活 ' + m.alive.length + ' 人' : '没有赢家')}</b>
+          <span class="tiny muted">${m.players.length} 名玩家 · 每回合 ${m.settings.selectSec}s 出招 / ${m.settings.revealSec}s 展示</span>
+        </div>
+        <div class="tiny muted" style="margin-top:6px">
+          ${m.settings.ecoOpen ? '明牌局（点数一路公开）' : '盲局（对局中点数全隐藏，这里看到的都是赛后翻开的底牌）'}
+          ${packs.length ? ' ｜ 拓展包：' + esc(packs.join('、')) : ' ｜ 只用基础包'}
+          ${m.exportedAt ? ' ｜ 导出时间 ' + esc(m.exportedAt.slice(0, 16).replace('T', ' ')) : ''}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row space wrap" style="gap:8px">
+          <b>回合</b>
+          <div class="row" style="gap:6px">
+            <button class="btn sm ghost" data-act="replay-prev" ${rp.idx === 0 ? 'disabled' : ''}>← 上一回合</button>
+            <button class="btn sm ghost" data-act="replay-next" ${rp.idx >= hist.length - 1 ? 'disabled' : ''}>下一回合 →</button>
+          </div>
+        </div>
+        <div class="rchips" style="margin-top:8px">
+          ${hist.map((h, i) => `<button class="rchip ${i === rp.idx ? 'on' : ''}" data-act="replay-round" data-idx="${i}">R${h.round}</button>`).join('')}
+        </div>
+        <div class="rplay" style="margin-top:10px">
+          <button class="btn sm ${rp.animate ? 'ghost' : 'primary'}" data-act="replay-again">▶ 重放本回合</button>
+          <button class="btn sm ghost" data-act="replay-static" ${rp.animate ? '' : 'disabled'}>⏸ 静态看数字</button>
+          <span class="tiny muted">点上面的回合号，或按 ← → 翻回合</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row space">
+          <b>第 ${entry.round} 回合 · 现场</b>
+          <span class="tiny muted">${rp.animate ? '正在逐拍重放' : '静态快照'}</span>
+        </div>
+        <div class="tiny muted" style="margin-top:4px">卡片上是<b>这一回合开打前</b>的血量与点数；打完变成多少，看下面的逐人明细。</div>
+        <div class="divider"></div>
+        ${playersHtml(app.pub, true, frame.tl, rp.animate)}
+        ${rp.animate ? captionHtml(frame.tl) : ''}
+      </div>
+
+      <div class="card">
+        <b>第 ${entry.round} 回合 · 逐人明细</b>
+        <div class="divider"></div>
+        ${roundRowsHtml(entry)}
+      </div>
+
+      <details class="card">
+        <summary style="cursor:pointer;font-weight:700">总览表：每一回合、每一个人的点数与血量</summary>
+        <div class="divider"></div>
+        ${matrixHtml(m, rp.idx)}
+      </details>
+      <div style="height:24px"></div>
+    </div>`;
+  }
+
+  /** 总览矩阵：一行一个回合，一列一个玩家；格子里是"出招 + 点数/血量怎么变" */
+  function matrixHtml(m, curIdx) {
+    const roster = (m.players && m.players.length ? m.players : (m.history[0].after || [])).map(p => ({ id: p.id, name: p.name }));
+    return `<div class="rtable"><table>
+      <thead><tr><th class="rr">回合</th>${roster.map(p => `<th>${esc(p.name)}</th>`).join('')}</tr></thead>
+      <tbody>${m.history.map((h, i) => `<tr class="${i === curIdx ? 'on' : ''}">
+        <td class="rr"><button class="rchip ${i === curIdx ? 'on' : ''}" data-act="replay-round" data-idx="${i}">R${h.round}</button></td>
+        ${roster.map(p => {
+          const r = (h.reports || []).find(x => x.id === p.id);
+          const b = (h.before || []).find(x => x.id === p.id) || {};
+          const a = (h.after || []).find(x => x.id === p.id) || {};
+          if (!r && !a.id) return '<td class="muted">—</td>';
+          if (r && r.alive === false) return '<td class="muted">已出局</td>';
+          const items = r ? (Object.keys(r.items || {}).map(id => B.ITEMS[id] ? B.ITEMS[id].name : id).join('+') || '空手') : '—';
+          const aim = r && (r.hits || []).length ? '→' + r.hits.map(x => rosterName(h, x.to)).join('、') : '';
+          return `<td>${r && r.dead ? '☠ ' : ''}${esc(items + aim)}
+            <div class="mini">🪙 ${b.points != null ? fmtNum(b.points) : '?'} → ${a.points != null ? fmtNum(a.points) : '?'}</div>
+            <div class="mini">❤ ${b.hp != null ? fmtHp(b.hp) : '?'} → ${a.hp != null ? fmtHp(a.hp) : '?'}</div>
+          </td>`;
+        }).join('')}
+      </tr>`).join('')}</tbody>
+    </table></div>`;
   }
 
   /* ------------------------------------------------------------ 道具面板 */
@@ -2476,8 +3026,13 @@ const VIEW = (function () {
   function renderSheet() {
     const el = $('#overlay');
     if (!sheet) { el.innerHTML = ''; return; }
-    const title = sheet === 'rules' ? '完整规则' : '战斗日志';
-    const body = sheet === 'rules' ? rulesHtml() : logHtml();
+    // sheet 平时是 'rules' / 'log'；导出失败时会被塞成一个 {kind:'dump'} 对象，退回"摆出文本让人复制"
+    const dump = typeof sheet === 'object' && sheet.kind === 'dump';
+    const title = dump ? '对局 JSON（请另存为 .json 文件）' : (sheet === 'rules' ? '完整规则' : '战斗日志');
+    const body = dump
+      ? `<div class="small muted">${esc(sheet.name)}</div>
+         <textarea class="field" readonly style="width:100%;height:46vh;margin-top:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;white-space:pre">${esc(sheet.text)}</textarea>`
+      : (sheet === 'rules' ? rulesHtml() : logHtml());
     el.innerHTML = `<div class="mask" data-act="maskclose">
       <div class="sheet" data-stop="1">
         <div class="row space"><h3>${esc(title)}</h3>
@@ -2490,8 +3045,15 @@ const VIEW = (function () {
 
   function logHtml() {
     const log = (app.pub && app.pub.log) || [];
-    if (!log.length) return '<div class="small muted">还没有战况。</div>';
-    return `<ul class="logbox">${log.slice().reverse().map(l => `<li>${esc(l)}</li>`).join('')}</ul>`;
+    // 对局中只有房主手上有"逐回合全量档案"，所以这里只给他导出按钮；
+    // 打完之后档案人人都有，导出按钮就出现在结束页上。
+    const canExport = app.isHost || (app.pub && app.pub.phase === 'over');
+    const bar = canExport
+      ? `<div class="row" style="margin-bottom:8px"><button class="btn sm" data-act="export">💾 导出对局 JSON</button>
+           <span class="tiny muted">含所有人每一回合的点数</span></div>`
+      : '';
+    if (!log.length) return bar + '<div class="small muted">还没有战况。</div>';
+    return bar + `<ul class="logbox">${log.slice().reverse().map(l => `<li>${esc(l)}</li>`).join('')}</ul>`;
   }
 
   function rulesHtml() {
@@ -2572,6 +3134,14 @@ const VIEW = (function () {
          · 死亡后点数与赠品清空，人变观战者，<b>头像变黑白</b>。<br>
          · 所有攻击同时结算：被反盾弹死的人，他本回合打出去的伤害依然生效。<br>
          · 伤害公式只减「防御」，反盾单独判定。</p>
+
+      <h4>对局存档与复盘</h4>
+      <p>· <b>导出</b>：房主在对局中随时可导出；对局结束后<b>所有人都能导出</b>。导出的 JSON 是<b>全量</b>的——
+         含每个人每一回合的点数、血量、背包、出招与伤害算式。<br>
+         · <b>导入复盘</b>：首页「导入对局 JSON · 复盘」，也可以直接把文件拖到那张卡片上。
+         进去以后能逐回合重放当时那一拍的动画，也能切「静态看数字」慢慢核对，
+         用 <code>←</code> <code>→</code> 翻回合。<br>
+         · 盲局在复盘里是<b>翻开的底牌</b>：对局中看不到别人的点数，赛后档案里全都记着。</p>
     </div>`;
   }
 
@@ -2706,6 +3276,25 @@ const VIEW = (function () {
         case 'copy': copyText(app.roomCode); break;
         case 'rules': sheet = 'rules'; renderSheet(); break;
         case 'log': sheet = 'log'; renderSheet(); break;
+        case 'export': doExport(); break;
+        case 'import': {
+          const inp = $('#matchFile');
+          if (inp) inp.click();
+          break;
+        }
+        case 'expand': {
+          const open = btn.getAttribute('data-open') === '1';
+          Array.prototype.forEach.call(document.querySelectorAll('details.rnd'), d => { d.open = open; });
+          btn.setAttribute('data-open', open ? '0' : '1');
+          btn.textContent = open ? '全部收起' : '全部展开';
+          break;
+        }
+        case 'replay-exit': exitReplay(); break;
+        case 'replay-prev': goReplayRound(app.replay ? app.replay.idx - 1 : 0); break;
+        case 'replay-next': goReplayRound(app.replay ? app.replay.idx + 1 : 0); break;
+        case 'replay-round': goReplayRound(Number(btn.getAttribute('data-idx')) || 0); break;
+        case 'replay-again': goReplayRound(app.replay ? app.replay.idx : 0, true); break;
+        case 'replay-static': if (app.replay) { app.replay.animate = false; render(); } break;
         case 'close': case 'maskclose': sheet = null; renderSheet(); break;
         case 'leave': ROOM.leave(); break;
         case 'addbot': ROOM.addBot(); break;
@@ -2733,6 +3322,10 @@ const VIEW = (function () {
     });
 
     document.addEventListener('change', e => {
+      if (e.target.id === 'matchFile') {
+        importFile(e.target.files && e.target.files[0]);
+        return;
+      }
       const el = e.target.closest('[data-set]');
       if (!el) return;
       const key = el.getAttribute('data-set');
@@ -2742,6 +3335,23 @@ const VIEW = (function () {
     document.addEventListener('input', e => {
       if (e.target.id === 'nickInput') { try { localStorage.setItem('badao_nick', e.target.value); } catch (err) { /* 隐私模式忽略 */ } }
       if (e.target.id === 'codeInput') e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+
+    // 对局文件拖进首页那张卡片就直接复盘（顺便拦掉"拖歪了浏览器直接打开文件"这种误操作）
+    document.addEventListener('dragover', e => e.preventDefault());
+    document.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!e.target.closest || !e.target.closest('[data-drop]')) return;
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) importFile(f);
+    });
+
+    // 复盘时用 ← → 翻回合，Esc 退出
+    document.addEventListener('keydown', e => {
+      if (app.mode !== 'replay' || !app.replay) return;
+      if (e.key === 'ArrowLeft') { goReplayRound(app.replay.idx - 1); e.preventDefault(); }
+      else if (e.key === 'ArrowRight') { goReplayRound(app.replay.idx + 1); e.preventDefault(); }
+      else if (e.key === 'Escape') exitReplay();
     });
 
     setInterval(() => {
@@ -2807,6 +3417,7 @@ const VIEW = (function () {
   }
 
   function update(pub, remainMs, remainTotal) {
+    if (app.mode === 'replay') return;          // 复盘时不接受联机快照，别把复盘画面顶掉
     app.pub = pub;
     if (remainMs != null) app.remainMs = remainMs;
     if (remainTotal != null) app.remainTotal = remainTotal;
@@ -2815,7 +3426,8 @@ const VIEW = (function () {
 
   return {
     app: app, bind: bind, render: render, update: update, toast: toast,
-    resetDraft: clearDraft, rulesHtml: rulesHtml
+    resetDraft: clearDraft, rulesHtml: rulesHtml,
+    exportMatch: doExport, importMatchText: importMatchText, matchFromPub: buildMatchFromPub
   };
 })();
 </script>
@@ -2870,12 +3482,14 @@ const ROOM = (function () {
     const left = remainMs();
     const base = { t: 'state', remainMs: left, remainTotal: remainTotal, code: code };
     // 每个人的快照不一样：出招阶段别人看不到你的点数/背包，免得被反推
+    // withHistory：逐回合全量档案只给房主自己（他自己随时能导出整局）；对局一结束，fetchState 会自动带上，
+    // 那时候所有人手上的都被翻开了，也就无所谓藏。
     conns.forEach(c => {
       try { if (c.conn.open) c.conn.send(Object.assign({ pub: B.publicState(state, { viewerId: c.id }) }, base)); }
       catch (e) { /* 单个连接坏了不影响别人 */ }
     });
     APP.roomCode = code;
-    VIEW.update(B.publicState(state, { viewerId: myId }), left, remainTotal);
+    VIEW.update(B.publicState(state, { viewerId: myId, withHistory: true }), left, remainTotal);
   }
 
   /* ------------------------------------------------------- 主机：回合流转 */
@@ -3191,6 +3805,7 @@ const ROOM = (function () {
     state.phase = 'lobby';
     state.log = [];
     state.lastResult = null;
+    state.history = [];                    // 新一局，旧档案清掉（否则最终战报会混进上一局的回合）
     APP.mode = 'room';
     VIEW.resetDraft();
     broadcast(true);
