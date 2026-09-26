@@ -1621,7 +1621,8 @@ const VIEW = (function () {
     remainTotal: 0,
     err: '',
     busy: false,
-    replay: null       // 复盘：{ match, idx, animate } —— 导入对局文件后才有
+    replay: null,      // 复盘：{ match, idx, animate } —— 导入对局文件后才有
+    relayInUse: false  // 本局是不是走了中继（跨网络兜底）—— 要让玩家知道数据经第三方转发
   };
 
   // chosen: 本回合挑中的那一种道具；count: 可叠道具的数量；sel: 每个道具选中的头像
@@ -1888,12 +1889,17 @@ const VIEW = (function () {
     <div class="topbar"><div class="inner">
       <b>拔刀</b>
       <span class="badge blue">房间 ${esc(app.roomCode)}</span>
+      ${app.relayInUse ? '<span class="badge amber">中继</span>' : ''}
       <div class="grow"></div>
       <button class="btn sm ghost" data-act="rules">规则</button>
       <button class="btn sm danger" data-act="leave">退出</button>
     </div></div>
     <div class="wrap">
       ${app.status ? `<div class="card" style="border-left:3px solid var(--amber)"><div class="small">⚠ ${esc(app.status)}</div></div>` : ''}
+      ${app.relayInUse ? `<div class="card" style="border-left:3px solid var(--amber)">
+        <div class="small">本局走的是<b>中继</b>（跨网络模式）：自己和房主没能直连，数据经公共服务器转发一下才能到，
+          所以<b>没有端到端加密</b>，速度也会慢一点。同一个 WiFi 下会自动走直连，就不会看到这一段。</div>
+      </div>` : ''}
       <div class="card">
         <div class="row space">
           <div>
@@ -2018,6 +2024,7 @@ const VIEW = (function () {
           <b>第 ${roundNo} 回合</b>
           <span class="badge ${reveal ? 'amber' : 'blue'}">${reveal ? '结算展示' : (canAct() ? '选择出招' : '等待中')}</span>
           <span class="badge grey">房间 ${esc(app.roomCode)}</span>
+          ${app.relayInUse ? '<span class="badge amber" title="本局走的是中继：数据经公共服务器转发，没有端到端加密">中继</span>' : ''}
           <button class="btn sm ghost" style="margin-left:auto" data-act="rules">规则</button>
         </div>
         <div class="bar" style="margin-top:6px"><i id="timerBar" style="width:100%"></i></div>
@@ -2028,6 +2035,7 @@ const VIEW = (function () {
     <div class="wrap">
       ${playersHtml(pub, reveal, tl, animate)}
       ${reveal && tl ? captionHtml(tl) : ''}
+      ${app.relayInUse ? '<div class="tiny" style="margin-top:6px;text-align:center;color:var(--amber)">本局走的是<b>中继</b>（跨网络模式）：数据经公共服务器转发，没有端到端加密</div>' : ''}
       ${pub.ecoHidden ? '<div class="tiny muted" style="margin-top:6px;text-align:center">对方的点数与背包要等结算时才公开（免得被反推出谁出了什么）</div>'
         : (pub.ecoOpen ? '<div class="tiny muted" style="margin-top:6px;text-align:center">明牌局：所有人的点数都是公开的</div>' : '')}
 
@@ -3148,9 +3156,13 @@ const VIEW = (function () {
          · <b>血量拓展 / 彩虹斩叠加 / 自守拓展</b>：默认全关，按需开启。</p>
 
       <h4>连不上房间怎么办</h4>
-      <p>联机其实分两段，任何一段不顺都会卡住，但原因完全不同：<br>
-         · <b>① 连联机服务器</b>（公共的 PeerJS 信令服务器，只负责告诉两边"对方在哪"）→ 失败提示「连不上联机服务器」<br>
-         · <b>② 和房主打洞直连</b>（WebRTC，真正的数据通道）→ 失败提示「打洞失败」</p>
+      <p>联机有三条路，程序会自己挑能走的那条：<br>
+         · <b>① 和房主打洞直连</b>（WebRTC：最快，而且端到端加密）→ 失败提示「打洞失败」<br>
+         · <b>② 中继通道</b>（数据经公共服务器转发一下：慢一点、没有端到端加密，但<b>不需要打洞</b>，
+         跨网络就靠它）→ 顶栏会挂「中继」标记，房间里也会写明<br>
+         · <b>③ 连信令服务器</b>（公共 PeerJS 服务器，只负责告诉两边"对方在哪"）→ 失败提示「连不上联机服务器」</p>
+      <p>顺序是 <b>①→②</b>：先试直连（同一个 WiFi 下几乎必成），打洞失败会自动重试一次，
+         还不行就自动落到中继。①②都不行（比如公共服务器全被挡了）才会告诉你彻底连不上。</p>
       <p>最常见的三种情况：<br>
          · <b>同一个 WiFi 能连、换个网络就连不上</b>：双方各自在路由器后面时，需要 STUN 帮忙问出各自的公网地址；
          本作已经把 ICE 换成国内能通的 STUN（小米 / B 站 / 芒果）并加了 TURN 中继兜底，
@@ -3161,7 +3173,7 @@ const VIEW = (function () {
          房主切到别的标签页或息屏太久时，浏览器会冻住他的页面，客人就卡在「房主没回话」。</p>
       <p><b>按这个顺序试</b>：① 两台设备连同一个普通 WiFi → ② 房主刷新页面重开房间 →
          ③ 换手机热点 → ④ 实在不行让房主先加电脑玩家开局。<br>
-         另外要注意：走 TURN 中继时，你的操作数据会经第三方服务器转一圈（只在对不上直连时才会用到）。</p>
+         现在跨网络（一个在家、一个用流量）会自动走中继，所以"只有同一个 WiFi 能连"这个老毛病应该没了。</p>
 
       <h4>本实现补充说明</h4>
       <p>· 「破盾」原规则没写点数消耗，本局按 <b>1 点</b> 实现；「偷」按 <b>0 点</b> 实现。<br>
@@ -3458,6 +3470,378 @@ const VIEW = (function () {
 })();
 </script>
 <script>/* ============================================================================
+ * 拔刀 · 中继传输层（WebRTC 直连失败时的兜底通道）
+ * ----------------------------------------------------------------------------
+ * 为什么需要它：WebRTC 是"直连"，要成功就得双方都能把自己的公网地址告诉对方。
+ * 只要有一边在严格 NAT 后面（公司/校园网、手机流量、对称 NAT），或者 STUN 拿不到地址，
+ * 这条路就走不通——表现就是"只有同一个 WiFi 才能连"。
+ *
+ * 中继不需要打洞：两边都**主动**连到一台公共服务器（走 8084 的 wss，就是普通网页加密流量），
+ * 数据由服务器转发一下。慢一点，但"能连上"永远比"快"重要。
+ *
+ * 实现用公共 MQTT 测试服务器，只用到协议里最小的子集：
+ * CONNECT / SUBSCRIBE / PUBLISH / PINGREQ，全 QoS 0（不做重传，丢了就等下一拍）。
+ *
+ * ⚠️ 两条实测结论直接决定了下面的写法（都是对着真 broker 跑出来的）：
+ *   1. 消息**连发会丢**：12 条 1.6KB 紧挨着发只到 5 成；每条隔 55ms 发，10 个客户端 8/8 全到。
+ *      → 所有发送都进队列，按 GAP_MS 排队吐出去。
+ *   2. **建连太快会被限流**：400ms 一条连开 8 条有一半被拒；改成 1.2s 一条就 8/8 全成。
+ *      → 断线重连必须退避，绝不原地狂重试。
+ *
+ * 还有一条必须说清楚：公共 broker 上的消息**没有端到端加密**（WebRTC 那条路有 DTLS）。
+ * 所以这条路只在 WebRTC 打不通时才走，而且界面上会明说"本局走的是中继"。
+ * ==========================================================================*/
+const RELAY = (function () {
+  'use strict';
+
+  /* ------------------------------------------------------------ 可调参数 */
+  const BROKERS = [
+    { name: 'EMQX', url: 'wss://broker.emqx.io:8084/mqtt' },
+    { name: 'HiveMQ', url: 'wss://broker.hivemq.com:8884/mqtt' },
+    { name: 'Mosquitto', url: 'wss://test.mosquitto.org:8081/' }
+  ];
+  const TOPIC_ROOT = 'badao/v2';
+  const CHUNK_BYTES = 6000;        // 超过就切片：大包在公共 broker 上又慢又容易丢
+  const GAP_MS = 55;               // 两条消息之间的最小间隔（实测：连发会丢，隔开就稳）
+  // 实测的发送速率上限：60KB 的档案按 25KB/s 发 3/3 次全到；按 60KB/s 发只成 1/3 次。
+  // 所以按**字节**限速，而不是只按条数——大消息必须慢慢喂给公共 broker。
+  const RATE_BYTES_PER_S = 20 * 1024;
+  const KEEPALIVE_S = 45;
+  const MAX_RETRY_MS = 30000;
+  const CONNECT_TIMEOUT_MS = 9000;
+
+  const enc = s => (typeof TextEncoder !== 'function' ? null : new TextEncoder().encode(s));
+  const dec = b => (typeof TextDecoder !== 'function' ? '' : new TextDecoder().decode(b));
+
+  /* ==================================================== MQTT 3.1.1 最小实现 */
+  function mqttVarLen(n) {
+    const out = [];
+    do { let d = n & 0x7f; n >>= 7; if (n) d |= 0x80; out.push(d); } while (n);
+    return out;
+  }
+  function mqttStr(s) {
+    const b = enc(s) || new Uint8Array(0);
+    const out = new Uint8Array(2 + b.length);
+    out[0] = (b.length >> 8) & 0xff; out[1] = b.length & 0xff;
+    out.set(b, 2);
+    return out;
+  }
+  function mqttConcat(parts) {
+    let n = 0;
+    parts.forEach(p => { n += p.length; });
+    const out = new Uint8Array(n);
+    let o = 0;
+    parts.forEach(p => { out.set(p, o); o += p.length; });
+    return out;
+  }
+  function mqttPacket(type, body) {
+    const head = mqttVarLen(body.length);
+    const out = new Uint8Array(1 + head.length + body.length);
+    out[0] = type;
+    out.set(head, 1);
+    out.set(body, 1 + head.length);
+    return out;
+  }
+  function mqttConnect(clientId) {
+    const ka = new Uint8Array([(KEEPALIVE_S >> 8) & 0xff, KEEPALIVE_S & 0xff]);
+    return mqttPacket(0x10, mqttConcat([mqttStr('MQTT'), new Uint8Array([4, 2]), ka, mqttStr(clientId)]));
+  }
+  function mqttSubscribe(packetId, topic) {
+    const pid = new Uint8Array([(packetId >> 8) & 0xff, packetId & 0xff]);
+    return mqttPacket(0x82, mqttConcat([pid, mqttStr(topic), new Uint8Array([0])]));
+  }
+  function mqttPublish(topic, payloadBytes) {
+    return mqttPacket(0x30, mqttConcat([mqttStr(topic), payloadBytes]));
+  }
+  function mqttPing() { return new Uint8Array([0xc0, 0x00]); }
+
+  /**
+   * 累积式解析：一个 MQTT 包可能被切在好几个 WebSocket 帧里，
+   * 一个帧里也可能塞着好几个包，所以必须"攒够一个再吐"，剩下的留着等下一帧。
+   * （第一版没做这件事，测出来时好时坏，纯粹是自己坑自己。）
+   */
+  function mqttParse(buf, onPacket) {
+    let i = 0;
+    while (i + 1 < buf.length) {
+      let mult = 1, len = 0, j = i + 1, d;
+      for (;;) {
+        if (j >= buf.length) return buf.slice(i);
+        d = buf[j++]; len += (d & 0x7f) * mult; mult *= 128;
+        if (!(d & 0x80)) break;
+        if (mult > 128 * 128 * 128) return buf.slice(i);    // 长度字节畸形，丢掉重来
+      }
+      if (j + len > buf.length) return buf.slice(i);         // 包体还没收全
+      const type = buf[i] >> 4;
+      if (type === 3) {                                      // PUBLISH
+        const tl = (buf[j] << 8) | buf[j + 1];
+        onPacket({ type: 3, topic: dec(buf.slice(j + 2, j + 2 + tl)), payload: buf.slice(j + 2 + tl, j + len) });
+      } else {
+        onPacket({ type: type });
+      }
+      i = j + len;
+    }
+    return buf.slice(i);
+  }
+
+  /* ====================================================== 连接一个 broker */
+  /**
+   * 对外就是一个小连接对象：自己管发送队列、心跳、断线退避。
+   *   opts.onStatus(text)        —— 给界面看的人话进度
+   *   opts.onMessage(topic,text) —— 收到消息（原始文本）
+   *   opts.onReady(name)         —— 真的连上了（收到 CONNACK）
+   *   opts.onFail(why)           —— 试完所有 broker 都不行
+   */
+  function openBroker(opts) {
+    const WS = opts.WebSocket || (typeof WebSocket === 'function' ? WebSocket : null);
+    // 没有 TextEncoder 就会把每条消息都编码成空字节——那还不如干脆别连，
+    // 免得"看起来连上了、其实一直在发空包"。
+    if (typeof TextEncoder !== 'function' || typeof TextDecoder !== 'function') {
+      setTimeout(() => { if (opts.onFail) opts.onFail('这个浏览器太旧（不支持 TextEncoder），用不了中继通道。'); }, 0);
+      return { subscribe: function () {}, publish: function () {}, close: function () {}, isReady: () => false, brokerName: () => '' };
+    }
+    const st = {
+      ws: null, ready: false, dead: false, brokerIndex: -1, broker: null,
+      pending: new Uint8Array(0), subs: [], queue: [], draining: false,
+      lastSend: 0, lastBytes: 0, keep: null, retry: 0, connectTimer: null
+    };
+    const myId = opts.clientId || ('r' + Math.random().toString(36).slice(2, 10));
+    const onMessage = opts.onMessage || function () {};
+    const onStatus = opts.onStatus || function () {};
+    const onReady = opts.onReady || function () {};
+    const onFail = opts.onFail || function () {};
+    const status = t => { try { onStatus(t); } catch (e) { /* 界面出错不影响连接 */ } };
+
+    function drain() {
+      if (st.draining || st.dead) return;
+      st.draining = true;
+      const step = () => {
+        if (st.dead || !st.ready || !st.queue.length) { st.draining = false; return; }
+        const wait = Math.max(GAP_MS, Math.round(st.lastBytes / RATE_BYTES_PER_S * 1000))
+          - (Date.now() - st.lastSend);
+        if (wait > 0) { setTimeout(step, wait); return; }
+        const item = st.queue.shift();
+        try { st.ws.send(item.bytes); } catch (e) { st.draining = false; return; }
+        st.lastSend = Date.now();
+        st.lastBytes = item.bytes.length;
+        step();
+      };
+      step();
+    }
+    /**
+     * 入队。key 用来"合并"：状态快照是**后来居上**的，同一个客人排队等发的旧快照
+     * 没有意义，直接换掉——不然 12 个客人 × 每秒两份的队列会越堆越长，越拖越旧。
+     */
+    function enqueue(bytes, key) {
+      if (key) {
+        const i = st.queue.findIndex(x => x.key === key);
+        if (i >= 0) { st.queue[i] = { bytes: bytes, key: key }; drain(); return; }
+      }
+      st.queue.push({ bytes: bytes, key: key || null });
+      drain();
+    }
+
+    function shutdown(why, retryable) {
+      if (st.keep) { clearInterval(st.keep); st.keep = null; }
+      if (st.connectTimer) { clearTimeout(st.connectTimer); st.connectTimer = null; }
+      st.ready = false;
+      try { if (st.ws) st.ws.close(); } catch (e) { /* 已经断了 */ }
+      st.ws = null;
+      if (st.dead) return;
+      if (!retryable) { st.dead = true; onFail(why); return; }
+      // 退避重连：建连太快会被公共 broker 限流，所以一次比一次等得久
+      st.retry = Math.min(st.retry + 1, 6);
+      const wait = Math.min(MAX_RETRY_MS, 1500 * Math.pow(2, st.retry - 1));
+      status(`${why}，${Math.round(wait / 1000)} 秒后重试中继…`);
+      setTimeout(() => { if (!st.dead) dial(); }, wait);
+    }
+
+    function dial() {
+      st.brokerIndex = (st.brokerIndex + 1) % BROKERS.length;
+      st.broker = BROKERS[st.brokerIndex];
+      let ws;
+      try { ws = new WS(st.broker.url, 'mqtt'); }
+      catch (e) { shutdown('这个浏览器连不上中继服务器', true); return; }
+      ws.binaryType = 'arraybuffer';
+      st.ws = ws;
+      st.pending = new Uint8Array(0);
+      status(`正在连中继服务器（${st.broker.name}）…`);
+      st.connectTimer = setTimeout(() => shutdown(`${st.broker.name} 没回应`, true), CONNECT_TIMEOUT_MS);
+      ws.onopen = () => { try { ws.send(mqttConnect(myId)); } catch (e) { shutdown('连接握手失败', true); } };
+      ws.onerror = () => { shutdown(`${st.broker.name} 连接出错`, true); };
+      ws.onclose = () => { if (st.ready) shutdown('和中继服务器的连接断了', true); };
+      ws.onmessage = ev => {
+        const data = ev && ev.data;
+        // 不用 instanceof：不同 iframe/realm 造出来的 ArrayBuffer 过不了这一关，
+        // 直接看"有没有 byteLength"更可靠（ArrayBuffer 和 TypedArray 都有）
+        let chunk = null;
+        if (data && typeof data.byteLength === 'number' && data.byteLength > 0) {
+          chunk = data.buffer
+            ? new Uint8Array(data.buffer, data.byteOffset || 0, data.byteLength)
+            : new Uint8Array(data);
+        }
+        if (!chunk) return;
+        const all = new Uint8Array(st.pending.length + chunk.length);
+        all.set(st.pending, 0); all.set(chunk, st.pending.length);
+        st.pending = mqttParse(all, p => {
+          if (p.type === 2) {                                   // CONNACK：真的连上了
+            if (st.connectTimer) { clearTimeout(st.connectTimer); st.connectTimer = null; }
+            st.ready = true;
+            st.retry = 0;
+            st.subs.forEach((t, i) => enqueue(mqttSubscribe(i + 1, t)));
+            st.keep = setInterval(() => {
+              try { if (st.ws) st.ws.send(mqttPing()); } catch (e) { /* 下一拍再说 */ }
+            }, KEEPALIVE_S * 800);
+            status('');
+            onReady(st.broker.name);
+          } else if (p.type === 3) {
+            onMessage(p.topic, dec(p.payload));
+          }
+        });
+      };
+    }
+
+    st.subscribe = topic => { st.subs.push(topic); if (st.ready) enqueue(mqttSubscribe(st.subs.length, topic)); };
+    /** key：同一条道上"只保留最新一条"的合并标记（状态快照用） */
+    st.publish = (topic, text, key) => { enqueue(mqttPublish(topic, enc(text) || new Uint8Array(0)), key); };
+    st.close = () => {
+      st.dead = true;
+      if (st.keep) clearInterval(st.keep);
+      try { if (st.ws) st.ws.close(); } catch (e) { /* 忽略 */ }
+    };
+    st.isReady = () => st.ready;
+    st.brokerName = () => (st.broker ? st.broker.name : '');
+    dial();
+    return st;
+  }
+
+  /* ==================================================== 分片：大消息切片发 */
+  function splitChunks(text) {
+    if (text.length <= CHUNK_BYTES) return [text];
+    const out = [];
+    for (let i = 0; i < text.length; i += CHUNK_BYTES) out.push(text.slice(i, i + CHUNK_BYTES));
+    return out;
+  }
+  const packChunk = (seq, total, piece) => JSON.stringify({ c: seq, n: total, d: piece });
+
+  /** 收件侧：按序号拼回去；乱序、缺片都能扛（缺了就当这条没来，等下一次重发） */
+  function makeCollector(onDone) {
+    const parts = {};
+    return text => {
+      let o = null;
+      try { o = JSON.parse(text); } catch (e) { return; }
+      if (!o || typeof o.c !== 'number' || typeof o.n !== 'number') return;   // 不认识的包，丢掉
+      if (o.n === 1) { onDone(o.d === undefined ? o : JSON.parse(o.d), text); return; }
+      const slot = parts[o.n] || (parts[o.n] = { got: 0, buf: new Array(o.n) });
+      if (slot.buf[o.c] === undefined) slot.got++;
+      slot.buf[o.c] = o.d;
+      if (slot.got === o.n) {
+        const full = slot.buf.join('');
+        delete parts[o.n];
+        let msg = null;
+        try { msg = JSON.parse(full); } catch (e) { return; }
+        onDone(msg, full);
+      }
+    };
+  }
+
+  /* ==================================================== 房间：房主 / 客人 */
+  const roomTopic = code => `${TOPIC_ROOT}/${String(code || '').toUpperCase()}`;
+
+  /**
+   * 房主：订 <房间>/in，给每个客人单独发 <房间>/o/<客人id>。
+   * 为什么每个客人一条私有 topic？因为"别人的点数不下发"必须保持住——
+   * 不能图省事让所有人收同一份快照，那样谁都能看到别人有多少点。
+   */
+  function openHost(code, opts) {
+    opts = opts || {};
+    const inbox = roomTopic(code) + '/in';
+    const collect = makeCollector((msg, raw) => {
+      if (!msg || !msg.f) return;
+      try { opts.onMessage(msg.f, msg.m, raw); } catch (e) { /* 单条出错不影响连接 */ }
+    });
+    const broker = openBroker({
+      clientId: 'h' + Math.random().toString(36).slice(2, 10),
+      WebSocket: opts.WebSocket,
+      onStatus: opts.onStatus,
+      onReady: opts.onReady,
+      onFail: opts.onFail,
+      onMessage: (topic, text) => { if (topic === inbox) collect(text); }
+    });
+    broker.subscribe(inbox);
+    broker.subscribe(roomTopic(code) + '/all');      // 全员一份的消息（对局档案）走这条
+    return {
+      brokerName: broker.brokerName,
+      ready: broker.isReady,
+      isHostSide: true,
+      /** 全员一份的消息（对局结束后人人相同的那份档案），只发一次，省掉 N 倍流量 */
+      broadcastAll: obj => {
+        const topic = `${roomTopic(code)}/all`;
+        const text = JSON.stringify(obj);
+        const parts = splitChunks(text);
+        parts.forEach((p, i) => broker.publish(topic, packChunk(i, parts.length, p)));
+      },
+      /** 发给某个客人：大消息自动切片 + 排队限速；状态快照只留最新一份 */
+      sendTo: (clientId, obj, coalesce) => {
+        const topic = `${roomTopic(code)}/o/${clientId}`;
+        const text = JSON.stringify(obj);
+        const parts = splitChunks(text);
+        parts.forEach((p, i) => broker.publish(topic, packChunk(i, parts.length, p),
+          // 单片的快照才能合并；切成好几片的（大档案）必须老老实实按顺序发完
+          (coalesce && parts.length === 1) ? 'st:' + clientId : null));
+      },
+      close: broker.close
+    };
+  }
+
+  /** 客人：订自己的私有 topic；发消息统一扔到 <房间>/in，包里带上"我是谁" */
+  function openGuest(code, guestId, opts) {
+    opts = opts || {};
+    const mine = `${roomTopic(code)}/o/${guestId}`;
+    const allTopic = `${roomTopic(code)}/all`;
+    const collect = makeCollector(msg => { if (msg) opts.onMessage(msg); });
+    const collectAll = makeCollector(msg => { if (msg && opts.onAll) opts.onAll(msg); });
+    const broker = openBroker({
+      clientId: 'g' + Math.random().toString(36).slice(2, 10),
+      WebSocket: opts.WebSocket,
+      onStatus: opts.onStatus,
+      onReady: opts.onReady,
+      onFail: opts.onFail,
+      onMessage: (topic, text) => {
+        if (topic === mine) collect(text);
+        else if (topic === allTopic) collectAll(text);
+      }
+    });
+    broker.subscribe(mine);
+    broker.subscribe(allTopic);
+    return {
+      brokerName: broker.brokerName,
+      ready: broker.isReady,
+      isHostSide: false,
+      send: obj => {
+        const text = JSON.stringify({ f: guestId, m: obj });
+        const parts = splitChunks(text);
+        parts.forEach((p, i) => broker.publish(roomTopic(code) + '/in', packChunk(i, parts.length, p)));
+      },
+      close: broker.close
+    };
+  }
+
+  return {
+    openHost: openHost, openGuest: openGuest,
+    brokers: () => BROKERS.map(b => b.url),
+    GAP_MS: GAP_MS, CHUNK_BYTES: CHUNK_BYTES, RATE_BYTES_PER_S: RATE_BYTES_PER_S,
+    // 下面这些只给自测用：协议细节能被单独钉住
+    _mqtt: {
+      connect: mqttConnect, subscribe: mqttSubscribe, publish: mqttPublish, ping: mqttPing,
+      parse: mqttParse, varLen: mqttVarLen
+    },
+    _splitChunks: splitChunks, _makeCollector: makeCollector, _roomTopic: roomTopic
+  };
+})();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = RELAY;
+</script>
+<script>/* ============================================================================
  * 拔刀 · 联机层
  * 主机（房主）权威：房主持有完整局面，客户端只发"我出什么招"，主机广播公开状态。
  * 房间码 = PeerJS 的 ID（badao3-XXXX），所以不需要任何后台服务器。
@@ -3537,6 +3921,15 @@ const ROOM = (function () {
   let joinToken = 0;             // 每发起一轮加入就 +1，用来作废上一轮还在跑的定时器
   let myConn = null;             // 仅客户端有
   let hostKeepAlive = null;      // 房主：定时检查"我和信令服务器还连着吗"
+  /* 中继兜底（跨网络那条路）：WebRTC 打不通时改走公共 MQTT 服务器转发 */
+  let relay = null;              // 当前的中继连接（房主 / 客人各一套）
+  let relaySweeper = null;       // 房主：收拾掉线很久的中继客人
+  let relayPinger = null;        // 客人：给房主报"我还在"
+  let relayDumpSent = false;     // 对局档案只在收尾时经中继发一次（全员一份）
+  let relayKicking = false;      // 防止"中继失败"和"直连失败"两条路重复报错
+  let relayInUse = false;        // 客人：本局实际走的是中继
+  let relayPending = null;       // 中继上正在等确认的重要消息（会重发）
+  const relayAvailable = () => typeof RELAY !== 'undefined' && !!RELAY;
 
   /* --------------------------------------------------------------- 工具 */
   function randCode() {
@@ -3563,9 +3956,19 @@ const ROOM = (function () {
     // withHistory：逐回合全量档案只给房主自己（他自己随时能导出整局）；对局一结束，fetchState 会自动带上，
     // 那时候所有人手上的都被翻开了，也就无所谓藏。
     conns.forEach(c => {
-      try { if (c.conn.open) c.conn.send(Object.assign({ pub: B.publicState(state, { viewerId: c.id }) }, base)); }
-      catch (e) { /* 单个连接坏了不影响别人 */ }
+      try {
+        if (!c.conn.open) return;
+        const pub = B.publicState(state, { viewerId: c.id });
+        // 中继是按字节限速的：整份对局档案（几十 KB）不按人头重发 N 遍，
+        // 改成对局结束时用"全员一份"的 topic 发一次（下面 relayDump）。
+        if (c.relay && pub.history) delete pub.history;
+        c.conn.send(Object.assign({ pub: pub }, base));
+      } catch (e) { /* 单个连接坏了不影响别人 */ }
     });
+    if (relay && !relayDumpSent && state.phase === 'over' && state.history.length) {
+      relayDumpSent = true;
+      relay.broadcastAll({ t: 'dump', payload: { history: state.history } });
+    }
     APP.roomCode = code;
     VIEW.update(B.publicState(state, { viewerId: myId, withHistory: true }), left, remainTotal);
   }
@@ -3671,6 +4074,59 @@ const ROOM = (function () {
     }
   }
 
+  /* ------------------------------------------------------- 中继（跨网络兜底） */
+  /**
+   * 房主开一个中继房间。它和 PeerJS 直连**互不干扰、同时开着**：
+   * 同一个 WiFi 的人走直连（快、端到端加密），跨网络连不上的人自动落到中继上来。
+   */
+  function openHostRelay() {
+    if (!relayAvailable()) return;
+    closeRelay();
+    relay = RELAY.openHost(code, {
+      onStatus: t => { if (t) { APP.status = t; VIEW.render(); } },
+      onReady: () => { if (/中继/.test(APP.status || '')) { APP.status = ''; VIEW.render(); } },
+      onFail: () => { /* 中继连不上不影响直连房主，静默即可 */ },
+      onMessage: (fromId, msg) => { if (state && fromId) onHostData(msg, relayLink(fromId)); }
+    });
+    if (relaySweeper) clearInterval(relaySweeper);
+    relaySweeper = setInterval(() => {
+      if (!state) return;
+      const now = Date.now();
+      let dirty = false;
+      conns.filter(c => c.relay).forEach(c => {
+        if (now - c.seen < 15000) return;
+        c.conn.open = false;
+        const p = c.id ? B.getPlayer(state, c.id) : null;
+        if (p && p.connected) { p.connected = false; p.submitted = true; dirty = true; }
+        conns = conns.filter(x => x !== c);
+      });
+      if (dirty) broadcast(true);
+    }, 5000);
+  }
+
+  /**
+   * 把"从中继来的某个客人"包装成一条虚拟连接：
+   * 这样 onHostData / broadcast 那套逻辑一行都不用改，中继客人看起来就跟直连客人一样。
+   */
+  function relayLink(fromId) {
+    const found = conns.find(c => c.relay && c.id === fromId);
+    if (found) { found.seen = Date.now(); return found.conn; }
+    const conn = {
+      open: true,
+      send: obj => { try { if (relay) relay.sendTo(fromId, obj, !!(obj && obj.t === 'state')); } catch (e) { /* 单条失败无所谓 */ } },
+      close: () => {}
+    };
+    conns.push({ conn: conn, id: fromId, relay: true, seen: Date.now() });
+    return conn;
+  }
+
+  function closeRelay() {
+    if (relaySweeper) { clearInterval(relaySweeper); relaySweeper = null; }
+    if (relayPinger) { clearInterval(relayPinger); relayPinger = null; }
+    if (relay) { try { relay.close(); } catch (e) { /* 忽略 */ } relay = null; }
+    relayKicking = false;
+  }
+
   /* --------------------------------------------------------------- 建房 */
   function create(name) {
     APP.busy = true;
@@ -3688,7 +4144,10 @@ const ROOM = (function () {
     VIEW.render();
     ensureTicker();     // 一定要先转起来：房主可能在联机服务连上之前就开局
 
-    if (!libOK()) {                  // 降级：单机房间
+    openHostRelay();                 // 中继和直连**同时**开着：客人挑能用的那条走
+
+    if (!libOK()) {                  // 拿不到 PeerJS：直连没戏，但中继还能让人连进来
+      APP.status = '联机库没加载出来：朋友可以用「中继」连进来（慢一点），也可以先加电脑玩家玩';
       broadcast(true);
       return;
     }
@@ -3800,6 +4259,9 @@ const ROOM = (function () {
         setTimeout(() => openClientPeer(name, attempt + 1, token), 800);
         return;
       }
+      // 直连实在不行 → 换中继：打洞失败、房主没回话、连信令服务器都连不上，这三件事
+      // 中继都不经过（它是另一台服务器、另一个端口），所以三条路都值得试一次。
+      if (kind === 'punch' || kind === 'hostidle' || kind === 'signal') { tryRelay(name); return; }
       failJoin(joinFailText(kind));
     };
 
@@ -3846,11 +4308,8 @@ const ROOM = (function () {
         if (d.t === 'state') {
           clearTimeout(welcomeTimer);
           settled = true;                        // 收到房主的快照＝这次连接彻底成了
-          APP.roomCode = d.code || code;
-          VIEW.update(d.pub, d.remainMs, d.remainTotal);
-        } else if (d.t === 'err') {
-          toast(d.msg);
         }
+        onClientData(d);
       });
       conn.on('close', () => {
         stopTimers();
@@ -3897,7 +4356,99 @@ const ROOM = (function () {
     });
   }
 
+  /** 客人收到房主的消息：直连和中继两条路共用这一套处理 */
+  function onClientData(d) {
+    if (!d || !d.t) return;
+    if (d.t === 'state') {
+      APP.roomCode = d.code || code;
+      VIEW.update(d.pub, d.remainMs, d.remainTotal);
+      if (relayPending && relayPending.verify && relayPending.verify(APP.pub) === 'done') stopRelayRetry();
+    } else if (d.t === 'dump') {
+      // 中继那条路上，对局档案是"全员一份"单独发的（省得按人头重发 N 遍）
+      if (APP.pub && d.payload) { APP.pub.history = d.payload.history; VIEW.render(); }
+    } else if (d.t === 'err') {
+      toast(d.msg);
+    }
+  }
+
+  function stopRelayRetry() {
+    if (relayPending) { clearInterval(relayPending.timer); relayPending = null; }
+  }
+
+  /**
+   * 中继上的重要消息会丢（QoS0），所以隔 2.5 秒重发一次，直到从房主快照里看到结果。
+   * verify 返回 'done'（成了）/ 'wait'（再等等）/ 'abort'（已经过时，别再发了，比如回合都换了）。
+   */
+  function relaySendReliable(obj, verify) {
+    if (!relay) return;
+    stopRelayRetry();
+    relay.send(obj);
+    if (!verify) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      if (!relay) { stopRelayRetry(); return; }
+      const verdict = APP.pub ? verify(APP.pub) : 'wait';
+      if (verdict === 'done' || verdict === 'abort' || tries >= 4) { stopRelayRetry(); return; }
+      tries++;
+      relay.send(obj);
+    }, 2500);
+    relayPending = { timer: timer, verify: verify };
+  }
+
+  /** 直连打不通时改走中继。这是"只有同一个 WiFi 能连"的正解：中继不需要打洞。 */
+  function tryRelay(name) {
+    if (!relayAvailable() || relayKicking) { failJoin(joinFailText('punch')); return; }
+    relayKicking = true;
+    closeRelay();
+    try { if (peer) peer.destroy(); } catch (e) { /* 忽略 */ }
+    peer = null;
+    APP.status = '直连打不通，改用中继连接（数据经公共服务器转发，慢一点但能连上）…';
+    VIEW.render();
+
+    const token = ++joinToken;
+    const stale = () => token !== joinToken;
+    let done = false, relayReady = false;
+    const fail = why => {
+      if (done || stale()) return;
+      done = true; relayKicking = false;
+      failJoin(why);
+    };
+    const okTimer = setTimeout(() => fail(relayReady
+      ? '中继通了，但房主一直没回话（房主那边可能没开中继，或者他的页面卡住了）。'
+      : '公共中继服务器也连不上（你的网络可能把外部服务器都挡了）。换个网络更靠谱，或者让房主加电脑玩家先开局。'), 12000);
+
+    relay = RELAY.openGuest(code, myId, {
+      onStatus: t => { if (t && !done && !stale()) { APP.status = t; VIEW.render(); } },
+      onReady: () => {
+        if (done || stale()) return;
+        relayReady = true;
+        APP.status = '中继已连上，正在登记…';
+        VIEW.render();
+        relaySendReliable({ t: 'join', name: String(name || '玩家').slice(0, 8), id: myId },
+          pub => (pub.players.some(p => p.id === myId) ? 'done' : 'wait'));
+        if (relayPinger) clearInterval(relayPinger);
+        relayPinger = setInterval(() => { if (relay) relay.send({ t: 'ping' }); }, 4000);
+      },
+      onMessage: msg => {
+        if (!msg || !msg.t) return;
+        if (msg.t === 'state' && !done) {
+          done = true; relayKicking = false; relayInUse = true;
+          clearTimeout(okTimer);
+          if (relayPending) { /* join 的确认就靠这条快照 */ }
+          VIEW.app.relayInUse = true;
+          toast('已通过中继连上房主（跨网络模式）');
+        }
+        onClientData(msg);
+      },
+      onAll: msg => onClientData(msg),
+      onFail: why => fail(why + '。中继也连不上就只能换个网络了，或者让房主加电脑玩家先开局。')
+    });
+  }
+
   function failJoin(msg) {
+    relayKicking = false;
+    stopRelayRetry();
+    closeRelay();                      // 中继也别在后台空转重连了
     APP.status = msg;
     APP.mode = 'home';
     APP.pub = null;
@@ -3930,6 +4481,8 @@ const ROOM = (function () {
       if (!state) return;
       const p = B.getPlayer(state, myId);
       if (p) { p.ready = !!ready; broadcast(true); }
+    } else if (relayInUse && relay) {
+      relaySendReliable({ t: 'ready', ready: !!ready });
     } else if (myConn && myConn.open) {
       myConn.send({ t: 'ready', ready: !!ready });
     } else {
@@ -3993,6 +4546,7 @@ const ROOM = (function () {
     state.log = [];
     state.lastResult = null;
     state.history = [];                    // 新一局，旧档案清掉（否则最终战报会混进上一局的回合）
+    relayDumpSent = false;                 // 中继那份"全员档案"也要重新发一次
     APP.mode = 'room';
     VIEW.resetDraft();
     broadcast(true);
@@ -4008,6 +4562,13 @@ const ROOM = (function () {
       p.picks = B.normalize(state, myId, action);
       p.submitted = true;
       broadcast(true);
+    } else if (relayInUse && relay) {
+      const r = (APP.pub && APP.pub.round) || 0;
+      relaySendReliable({ t: 'action', action: action }, pub => {
+        if (pub.round !== r) return 'abort';                       // 回合都换了，别再补发
+        const me = pub.players.find(p => p.id === myId);
+        return me && me.submitted ? 'done' : 'wait';
+      });
     } else {
       if (myConn && myConn.open) myConn.send({ t: 'action', action: action });
       else toast('还没连上房主，稍等再试');
@@ -4024,6 +4585,10 @@ const ROOM = (function () {
       p.picks = B.emptyPicks();
       p.submitted = false;
       broadcast(true);
+    } else if (relayInUse && relay) {
+      const r = (APP.pub && APP.pub.round) || 0;
+      relaySendReliable({ t: 'unlock' }, pub => pub.round !== r ? 'abort'
+        : ((pub.players.find(p => p.id === myId) || {}).submitted ? 'wait' : 'done'));
     } else if (myConn && myConn.open) {
       myConn.send({ t: 'unlock' });
     }
@@ -4037,6 +4602,11 @@ const ROOM = (function () {
     if (hostKeepAlive) { clearInterval(hostKeepAlive); hostKeepAlive = null; }
     reconnectCount = 0;
     joinToken++;                      // 作废正在跑的那一轮加入（取消/离开后别再弹错误）
+    stopRelayRetry();
+    closeRelay();
+    relayInUse = false;
+    relayDumpSent = false;
+    VIEW.app.relayInUse = false;
     isHost = false; state = null; code = '';
     APP.mode = 'home'; APP.pub = null; APP.status = ''; APP.roomCode = '';
     APP.isHost = false; APP.me = null; APP.remainMs = 0;
@@ -4050,7 +4620,9 @@ const ROOM = (function () {
     isHost: () => isHost, code: () => code, myId: () => myId,
     // 这两个只给自测用：把"连不上"的诊断口径钉住，免得以后被顺手改回默认的 Google STUN
     iceServers: () => ICE_SERVERS.map(s => s.urls),
-    failText: joinFailText
+    failText: joinFailText,
+    relayInUse: () => relayInUse,
+    isRelayHost: () => !!relay
   };
 })();
 </script>
